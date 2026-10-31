@@ -1,11 +1,10 @@
 # PSVSD/AM
 
-**Accessory Storage Mount** by RefurbedTech with AI Assistance. 
+**Accessory Storage Mount** — developed by RefurbedTech with AI assistance. A PS Vita PCH-1000 app and kernel plugin that simplifies setup and management of internal USB microSD storage through the accessory port. Features include automatic ux0/uma0 mounting, storage conflict checks, read/write verification, and diagnostic logging.
 
-A PS Vita PCH-1000 app and kernel plugin that simplifies setup and management of internal USB microSD storage through the accessory port. Features include automatic ux0/uma0 mounting, storage conflict checks, read/write verification, and diagnostic logging.
-A PS Vita PCH-1000 app and kernel plugin for an internal USB microSD reader connected to the accessory port. 
+AI tools assisted with code development, documentation, and testing. RefurbedTech directed development and performed hardware testing.
 
-Version **1.0.1**; Vita title ID **RTPSV0001**, package version **01.01**.
+Version **1.0.2** · Vita title ID **RTPSV0001** · Package version **01.02**
 
 ## Features
 
@@ -30,9 +29,9 @@ Automatic cold-boot mounting requires persistent taiHEN/Ensō. Otherwise loading
 
 ## Using main storage
 
-Prepare other games, savedata, licenses and storage content separately before selecting `ux0:`. The app copies **only** `ux0:app/RTPSV0001` and `ux0:app/VITASHELL` to the verified USB `uma0:app` folders. Matching files overwrite automatically; extra destination files remain. Staged and installed files are compared against the source before Save continues.
+Prepare other games, savedata, licenses and storage content separately before selecting `ux0:`. The app copies **only** `ux0:app/RTPSV0001` and `ux0:app/VITASHELL` to the verified USB `uma0:app` folders. Both complete destination app folders are replaced automatically, including removal of destination-only files and directories. The app stages and verifies the copies, moves the previous folders into rollback storage, promotes the new folders, then verifies their full contents and directory structure before Save continues. Unrelated app folders are untouched.
 
-There is no live `ux0:` switch. Save and Reboot applies the new boot setting; Save and Exit applies it at the next reboot. Saving while USB is already the verified live `ux0:` skips copying. A loaded mount plugin remains resident until reboot.
+This mirrors the source folders exactly; it does not remove obsolete files already present in the source. There is no live `ux0:` switch. Save and Reboot applies the new boot setting; Save and Exit applies it at the next reboot. Saving while USB is already the verified live `ux0:` skips copying. A loaded mount plugin remains resident until reboot.
 
 ## Controls
 
@@ -66,6 +65,6 @@ The three kernel payloads are intentional: `psvsd_am.skprx` is the boot plugin, 
 
 ## Validation and license
 
-Host checks: `sh tests/run_tests.sh`. These exercise control flow with mocked Vita APIs; they cannot prove hardware behavior, private firmware offsets or power-loss recovery. Original hardware reports confirmed secondary file transfers/standby recovery and primary mounting. Version 1.0.1 has passed the host suite but has not been cross-built or tested on a Vita.
+Host checks: `sh tests/run_tests.sh`. These exercise control flow with mocked Vita APIs; they cannot prove hardware behavior, private firmware offsets or power-loss recovery. Original hardware reports confirmed secondary file transfers/standby recovery and primary mounting. Version 1.0.2 has passed the host suite, a native VitaSDK build and static import checks; console testing is pending.
 
 GPL-3.0-or-later; see [COPYING](COPYING) and [third-party notices](docs/THIRD_PARTY_NOTICES.md). Derived from USBMC by Yifan Lu and VitaShell storage code by TheFloW. Font and taiHEN SDK components retain their own licenses.
