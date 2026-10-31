@@ -1,41 +1,55 @@
-/* Separate app handoff avoids promoting over a running PSVSD/AM process.
- * Uses VitaShell's updater/promotion pattern. GPL-3.0-or-later. */
+/* Separate installer; only its worker promotes the stopped main app.
+ * GPL-3.0-or-later. */
 #include "update_install.h"
+#include "../common/paths.h"
+#include "ui.h"
+#ifdef PSVSD_AM_HOST_TEST
+#include "mock_installer.h"
+#else
 #include <psp2/appmgr.h>
 #include <psp2/ctrl.h>
 #include <psp2/kernel/processmgr.h>
 #include <psp2/kernel/sysmem.h>
 #include <psp2/kernel/threadmgr.h>
 #include <psp2/display.h>
+#endif
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-#include "ui.h"
-static void *base;
+static uint32_t *buffers[2];
+static unsigned front;
+static AmUi model;
 static int install_result=-1;
 static unsigned install_done,install_phase;
-static char failure[192];
 static const char *failure_title="Installation failed";
+static char failure[192];
 static void handoff_log(const char *stage,int result) {
     FILE *f=fopen(AM_UPDATE_ROOT "/handoff.log","a");
     if (f) { fprintf(f,"%s: %08X\n",stage,(unsigned)result);fclose(f); }
 }
-static void show(int frame) {
-    if (!base) {
-        int block=sceKernelAllocMemBlock("AMInstaller",SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW,4*1024*1024,NULL);
-        if (block<0 || sceKernelGetMemBlockBase(block,&base)<0) return;
-    }
-    AmUi model={0};model.nav=VIEW_UPDATES;model.busy=1;model.update.state=UPDATE_INSTALLING;
-    model.update_animation=(unsigned)(frame<0?0:frame);
-    model.update_progress.phase=frame<0?AM_UPDATE_INSTALL_ERROR:frame==1000?AM_UPDATE_COMPLETE:
-        __atomic_load_n(&install_phase,__ATOMIC_ACQUIRE)?AM_UPDATE_SYSTEM_INSTALL:AM_UPDATE_PREPARE;
-    model.update.error=frame<0?install_result:0;
+static int init_display(void) {
+    void *base=NULL;
+    int block=sceKernelAllocMemBlock("AMInstaller",SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW,4*1024*1024,NULL);
+    if (block<0) return block;
+    int ret=sceKernelGetMemBlockBase(block,&base);if (ret<0) return ret;
+    memset(base,0,4*1024*1024);buffers[0]=base;
+    buffers[1]=buffers[0]+2*1024*1024/sizeof(uint32_t);
+    model.nav=VIEW_UPDATES;model.busy=1;model.update.state=UPDATE_INSTALLING;
+    return 0;
+}
+static void show(unsigned phase,unsigned tick) {
+    model.update_animation=tick;model.update_progress=(AmUpdateProgress){phase,0,0};
+    model.update.error=phase==AM_UPDATE_INSTALL_ERROR?install_result:0;
     snprintf(model.update.reason,sizeof(model.update.reason),"%s",failure);
     snprintf(model.update.stage,sizeof(model.update.stage),"%s",failure_title);
-    if (frame==1000) model.update_progress.done=model.update_progress.total=1;
-    am_ui_render(base,&model);
-    SceDisplayFrameBuf display={sizeof(display),base,960,SCE_DISPLAY_PIXELFORMAT_A8B8G8R8,960,544};
+    if (phase==AM_UPDATE_COMPLETE) model.update_progress.done=model.update_progress.total=1;
+    unsigned next=front^1u;
+    am_ui_render(buffers[next],&model);
+    SceDisplayFrameBuf display={sizeof(display),buffers[next],960,SCE_DISPLAY_PIXELFORMAT_A8B8G8R8,960,544};
     sceDisplaySetFrameBuf(&display,SCE_DISPLAY_SETBUF_NEXTFRAME);
+    sceDisplayWaitVblankStart();front=next;
+    /* Two vertical blanks per frame: about 30 fps, never repaint scanout. */
+    sceDisplayWaitVblankStart();
 }
 static int install_worker(SceSize argc,void *args) {
     (void)argc;(void)args;
@@ -48,35 +62,49 @@ static int install_worker(SceSize argc,void *args) {
     __atomic_store_n(&install_done,1,__ATOMIC_RELEASE);return 0;
 }
 int main(void) {
-    show(0);sceDisplayWaitVblankStart();
-    int closed=sceAppMgrDestroyOtherApp();
-    handoff_log("Installer started / close main",closed);
+    int display=init_display();
+    if (display<0) { handoff_log("Installer display failed",display);return 1; }
+    unsigned tick=0;show(AM_UPDATE_PREPARE,tick++);
+    handoff_log("Installer " ACCESSORY_VERSION " started",0);
+    int closed=sceAppMgrDestroyAppByName("RTPSV0001");
+    handoff_log("Close previous PSVSD/AM",closed);
     int worker=sceKernelCreateThread("AMInstallerWorker",install_worker,0x10000100,0x10000,0,0,NULL);
     int start=worker;if (start>=0) start=sceKernelStartThread(worker,0,NULL);
     if (start<0) { install_result=start;__atomic_store_n(&install_done,1,__ATOMIC_RELEASE); }
-    unsigned tick=0;
     while (!__atomic_load_n(&install_done,__ATOMIC_ACQUIRE)) {
-        show((int)(tick++%100));sceKernelDelayThread(50000);
+        unsigned phase=__atomic_load_n(&install_phase,__ATOMIC_ACQUIRE)?AM_UPDATE_SYSTEM_INSTALL:AM_UPDATE_PREPARE;
+        show(phase,tick++);
     }
     if (worker>=0) { if (start>=0) sceKernelWaitThreadEnd(worker,NULL,NULL);sceKernelDeleteThread(worker); }
     int result=install_result;FILE *f;
-    handoff_log("Install result",result);
-    remove(AM_UPDATE_ROOT "/ready");
+    handoff_log("Install result",result);remove(AM_UPDATE_ROOT "/ready");
     f=fopen(AM_UPDATE_ROOT "/result","wb");if (f) { fprintf(f,"%08X",(unsigned)result);fclose(f); }
-    if (result>=0) { show(1000);sceKernelDelayThread(500000); }
-    else snprintf(failure,sizeof(failure),"Installation did not complete. Press X to return to PSVSD/AM. Details are in Log.");
+    if (result>=0) for (unsigned i=0;i<15;++i) show(AM_UPDATE_COMPLETE,tick++);
+    if (result<0) snprintf(failure,sizeof(failure),"Installation did not complete.\nPress X to return to PSVSD/AM. Details are in Log.");
     int wait=result<0,held=1;
     for (;;) {
         if (wait) {
-            show(-1);
+            show(AM_UPDATE_INSTALL_ERROR,tick++);
             SceCtrlData pad;memset(&pad,0,sizeof(pad));sceCtrlPeekBufferPositive(0,&pad,1);
             int pressed=(pad.buttons&SCE_CTRL_CROSS)!=0;
-            if (!pressed || held) { held=pressed;sceKernelDelayThread(20000);continue; }
+            if (!pressed || held) { held=pressed;continue; }
         }
-        int launch=am_update_launch_app();
-        handoff_log("Launch PSVSD/AM",launch);
-        if (launch>=0) { sceKernelExitProcess(result<0?1:0);return 0; }
-        install_result=launch;wait=held=1;failure_title="Could not reopen PSVSD/AM";
-        snprintf(failure,sizeof(failure),"Press X to retry opening PSVSD/AM.\nThe installer will stay open.");
+        uint32_t token=sceKernelGetProcessTimeLow();if (!token) token=1;
+        int launch=am_update_relaunch_start(token);
+        handoff_log("Submit main-app launch",launch);
+        if (launch>=0) {
+            uint64_t deadline=sceKernelGetProcessTimeWide()+AM_RELAUNCH_WAIT_US;
+            do {
+                show(AM_UPDATE_REOPEN,tick++);
+                if (am_update_relaunch_check(token)>0) {
+                    handoff_log("Main-app startup acknowledged",0);am_update_relaunch_cancel();
+                    sceKernelExitProcess(result<0?1:0);return 0;
+                }
+            } while (sceKernelGetProcessTimeWide()<deadline);
+            launch=-1;handoff_log("Main-app startup acknowledgment timed out",launch);
+        }
+        am_update_relaunch_cancel();install_result=launch;wait=held=1;
+        failure_title="Could not reopen PSVSD/AM";
+        snprintf(failure,sizeof(failure),"No startup confirmation received.\nPress X to retry opening PSVSD/AM.");
     }
 }

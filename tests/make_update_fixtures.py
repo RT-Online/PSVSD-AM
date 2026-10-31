@@ -8,13 +8,19 @@ for p in ['app0:main-head.bin','app0:installer/eboot.bin','app0:installer/param.
 (root/'app0:sce_sys').mkdir(exist_ok=True);(root/'app0:sce_sys/icon0.png').write_bytes(b'fixture')
 def sfo(title='RTPSV0001',version='01.10'):
     keys=b'TITLE_ID\0APP_VER\0CONTENT_ID\0';values=b'';entries=b''
-    for key,value in [('TITLE_ID',title),('APP_VER',version),('CONTENT_ID','HB0001-RTPSV0001_00-0000000000000000')]:
+    for key,value in [('TITLE_ID',title),('APP_VER',version),('CONTENT_ID','HB0001-'+title+'_00-0000000000000000')]:
         value=value.encode()+b'\0';entries+=struct.pack('<HHIII',keys.index(key.encode()),0x204,len(value),len(value),len(values));values+=value
     return struct.pack('<5I',0x46535000,0x101,68,68+len(keys),3)+entries+keys+values
-for name in ['good','traversal','duplicate','wrong_title','wrong_version','oversize','truncated','crc','symlink']:
+for name in ['good','traversal','duplicate','wrong_title','wrong_version','oversize','truncated','crc','symlink','missing_helper','wrong_helper_title','wrong_helper_version']:
     with zipfile.ZipFile(root/(name+'.vpk'),'w',zipfile.ZIP_DEFLATED) as z:
         z.writestr('sce_sys/param.sfo',sfo('OTHER0001' if name=='wrong_title' else 'RTPSV0001','01.11' if name=='wrong_version' else '01.10'))
         z.writestr('eboot.bin',b'executable fixture')
+        z.writestr('main-head.bin',b'new main head')
+        z.writestr('sce_sys/icon0.png',b'new icon')
+        if name!='missing_helper':
+            z.writestr('installer/eboot.bin',b'new helper')
+            z.writestr('installer/head.bin',b'new helper head')
+            z.writestr('installer/param.sfo',sfo('OTHER0001' if name=='wrong_helper_title' else 'RTPSVUPD1','01.11' if name=='wrong_helper_version' else '01.10'))
         if name=='traversal':z.writestr('../escape',b'bad')
         if name=='duplicate':z.writestr('eboot.bin',b'duplicate')
         if name=='oversize':z.writestr('large',b'A'*(32*1024*1024+1))

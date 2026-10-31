@@ -95,11 +95,12 @@ int am_update_prepare(const char *version,char *reason,unsigned cap,AmUpdateProg
     snprintf(expected,sizeof(expected),"%02u.%02u",major,minor*10+patch);
     if (extract(progress,context)<0 || am_package_validate(AM_UPDATE_STAGE,expected)<0) goto bad;
     if (progress) progress(context,AM_UPDATE_PREPARE,0,0);
-    if (copy("app0:main-head.bin",AM_UPDATE_STAGE "/sce_sys/package/head.bin")<0 ||
-        copy("app0:installer/eboot.bin",AM_UPDATE_HELPER "/eboot.bin")<0 ||
-        copy("app0:installer/param.sfo",AM_UPDATE_HELPER "/sce_sys/param.sfo")<0 ||
-        copy("app0:installer/head.bin",AM_UPDATE_HELPER "/sce_sys/package/head.bin")<0 ||
-        copy("app0:sce_sys/icon0.png",AM_UPDATE_HELPER "/sce_sys/icon0.png")<0) goto bad;
+    if (copy(AM_UPDATE_STAGE "/main-head.bin",AM_UPDATE_STAGE "/sce_sys/package/head.bin")<0 ||
+        copy(AM_UPDATE_STAGE "/installer/eboot.bin",AM_UPDATE_HELPER "/eboot.bin")<0 ||
+        copy(AM_UPDATE_STAGE "/installer/param.sfo",AM_UPDATE_HELPER "/sce_sys/param.sfo")<0 ||
+        copy(AM_UPDATE_STAGE "/installer/head.bin",AM_UPDATE_HELPER "/sce_sys/package/head.bin")<0 ||
+        copy(AM_UPDATE_STAGE "/sce_sys/icon0.png",AM_UPDATE_HELPER "/sce_sys/icon0.png")<0) goto bad;
+    if (am_package_validate_helper(AM_UPDATE_HELPER,expected)<0) goto bad;
     FILE *f=fopen(AM_UPDATE_ROOT "/ready","wb");if (!f) goto bad;
     int ok=fwrite(expected,1,6,f)==6;if (fclose(f)) ok=0;if (!ok) goto bad;
     if (am_package_promote(AM_UPDATE_HELPER)<0) goto bad;

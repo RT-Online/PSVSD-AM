@@ -17,5 +17,6 @@ int sceIoRemove(const char *p);
 int sceIoOpen(const char *p,int flags,int mode);
 int sceIoWrite(int fd,const void *p,int n);
 int sceIoClose(int fd);
+int sceAppMgrLaunchAppByName2(const char *name,const char *param,void *opt);
 int sceAppMgrLaunchAppByUri(int flags,const char *uri);
 #endif

@@ -1,5 +1,6 @@
 /* PSVSD/AM application. GPL-3.0-or-later. */
 #include <psp2/ctrl.h>
+#include <psp2/appmgr.h>
 #include <psp2/display.h>
 #include <psp2/kernel/sysmem.h>
 #include <psp2/kernel/processmgr.h>
@@ -256,7 +257,7 @@ static void cleanup_installer(void) {
     int ret=am_update_cleanup_tick(&installer_cleanup,sceKernelGetProcessTimeWide(),
         model.busy || update_thread>=0,remove_installer,NULL);
     if (ret==1) {
-        remove(AM_UPDATE_ROOT "/result");am_log("Temporary installer removed.\n");
+        remove(AM_UPDATE_ROOT "/result");am_update_relaunch_cancel();am_log("Temporary installer removed.\n");
     } else if (ret<0) {
         am_log("Temporary installer cleanup deferred: %08X. Will retry next launch.\n",(unsigned)installer_cleanup.last_error);
     }
@@ -274,10 +275,19 @@ int main(void) {
     if (init_display()<0) return 1;
     int loaded=am_load_settings(&model.saved);model.pending=model.saved;
     if (loaded<0) snprintf(model.message,sizeof(model.message),"Settings unreadable; automatic mounting defaults off.");
+    draw();
+    int resumed=am_update_relaunch_confirm();
+    if (resumed>0) {
+        am_log("Updater return acknowledged: PSVSD/AM " ACCESSORY_VERSION "\n");
+        /* The helper can be suspended when the new app gains the foreground. */
+        int closed=sceAppMgrDestroyAppByName("RTPSVUPD1");
+        am_log("Close acknowledged installer: %08X\n",(unsigned)closed);
+    } else if (resumed<0) am_log("Updater return acknowledgment failed.\n");
     query_status();refresh_log();
     am_log("Opened PSVSD/AM " ACCESSORY_VERSION "; saved enabled=%d target=%s\n",model.saved.enabled,am_target_name(model.saved.target));
     int artwork=am_artwork_refresh();
     am_log("Artwork cache refresh: %08X\n",(unsigned)artwork);
+    if (artwork>0) snprintf(model.message,sizeof(model.message),"Artwork updated. Restart the Vita to refresh home-screen images.");
     if (artwork<0) snprintf(model.message,sizeof(model.message),"Artwork refresh failed (%08X). See Log.",(unsigned)artwork);
     char handoff[512];
     if (am_read_text(AM_UPDATE_ROOT "/handoff.log",handoff,sizeof(handoff))>=0) {
@@ -297,7 +307,7 @@ int main(void) {
     if (installed) {
         char result[16]={0};fread(result,1,8,installed);fclose(installed);
         am_log("Installer result: %s\n",result);
-        if (!strcmp(result,"00000000")) snprintf(model.message,sizeof(model.message),"Update installed. Saved mount settings retained.");
+        if (!strcmp(result,"00000000")) snprintf(model.message,sizeof(model.message),artwork>0?"Update installed. Restart to refresh home-screen artwork.":"Update installed. Saved mount settings retained.");
         else snprintf(model.message,sizeof(model.message),"Update installation failed (%s). See Log.",result);
     }
     SceIoStat helper_stat;

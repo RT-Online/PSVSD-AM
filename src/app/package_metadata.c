@@ -5,8 +5,8 @@
 #include <string.h>
 static unsigned u16(const unsigned char *p) { return p[0]|p[1]<<8; }
 static uint32_t u32(const unsigned char *p) { return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24; }
-int am_package_validate(const char *path,const char *expected) {
-    char name[256];snprintf(name,sizeof(name),"%s/sce_sys/param.sfo",path);
+static int validate(const char *path,const char *expected,const char *title,const char *content) {
+    char name[256];if (snprintf(name,sizeof(name),"%s/sce_sys/param.sfo",path)>=(int)sizeof(name)) return -1;
     FILE *f=fopen(name,"rb");if (!f) return -1;
     unsigned char b[16385];size_t size=fread(b,1,sizeof(b),f);int err=ferror(f);fclose(f);
     if (err || size<20 || size>16384 || u32(b)!=0x46535000) return -1;
@@ -21,10 +21,17 @@ int am_package_validate(const char *path,const char *expected) {
             if (!memchr(v,0,len)) return -1;
             unsigned bit=!strcmp(k,"TITLE_ID")?1:!strcmp(k,"APP_VER")?2:4;
             if (found&bit) return -1;
-            if ((bit==1 && strcmp(v,"RTPSV0001")) || (bit==2 && strcmp(v,expected)) ||
-                (bit==4 && strcmp(v,"HB0001-RTPSV0001_00-0000000000000000"))) return -1;
+            if ((bit==1 && strcmp(v,title)) || (bit==2 && strcmp(v,expected)) ||
+                (bit==4 && strcmp(v,content))) return -1;
             found|=bit;
         }
     }
     return found==7?0:-1;
+}
+
+int am_package_validate(const char *path,const char *expected) {
+    return validate(path,expected,"RTPSV0001","HB0001-RTPSV0001_00-0000000000000000");
+}
+int am_package_validate_helper(const char *path,const char *expected) {
+    return validate(path,expected,"RTPSVUPD1","HB0001-RTPSVUPD1_00-0000000000000000");
 }

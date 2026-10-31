@@ -9,7 +9,13 @@
 int am_update_prepare(const char *version,char *reason,unsigned cap,AmUpdateProgressCallback progress,void *context);
 int am_update_launch_installer(void);
 int am_update_launch_app(void);
+#define AM_RELAUNCH_WAIT_US 20000000u
+int am_update_relaunch_start(uint32_t token);
+int am_update_relaunch_check(uint32_t token);
+int am_update_relaunch_confirm(void);
+void am_update_relaunch_cancel(void);
 int am_package_remove_helper(void);
 int am_package_promote(const char *path);
 int am_package_validate(const char *path,const char *expected);
+int am_package_validate_helper(const char *path,const char *expected);
 #endif

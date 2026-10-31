@@ -91,7 +91,7 @@ static void update_progress_view(const AmUi *m) {
     const AmUpdateProgress *p=&m->update_progress;
     const char *phase=p->phase==AM_UPDATE_VERIFY?"Verifying download":p->phase==AM_UPDATE_EXTRACT?"Extracting update":
         p->phase==AM_UPDATE_PREPARE?"Preparing installer":p->phase==AM_UPDATE_SYSTEM_INSTALL?"Installing update":
-        p->phase==AM_UPDATE_COMPLETE?"Update installed":p->phase==AM_UPDATE_INSTALL_ERROR?(m->update.stage[0]?m->update.stage:"Installation failed"):"Downloading update";
+        p->phase==AM_UPDATE_REOPEN?"Opening PSVSD/AM":p->phase==AM_UPDATE_COMPLETE?"Update installed":p->phase==AM_UPDATE_INSTALL_ERROR?(m->update.stage[0]?m->update.stage:"Installation failed"):"Downloading update";
     round_rect(270,205,640,257,12,CARD);text(290,224,1,ACCENT,phase);
     unsigned done=p->total && p->done>p->total?p->total:p->done;
     char detail[160];

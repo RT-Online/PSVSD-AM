@@ -1,4 +1,45 @@
-# Current maintenance release 1.1.5 — launch handoff and artwork cache
+# Current maintenance release 1.1.6 — stable installer display and confirmed return
+
+APP_VER 01.16; kernel major 1/minor 16. Both title IDs stay unchanged.
+The user confirmed 1.1.5 starts the installer automatically, but its single-buffer
+screen flickers and its accepted return launch does not open the main app.
+A full system restart does display the new artwork.
+
+The helper renders to the inactive half of its 4 MiB CDRAM allocation and waits
+for the page flip at vertical blank. Two blanks per frame pace the display near
+30 fps; no arbitrary redraw sleep replaces synchronization. A native-source host
+test models queued/active buffers and fails if rendering touches either.
+
+`relaunch.c` writes a new per-attempt token before requesting launch and rejects
+stale/partial acknowledgments. Return prefers sceAppMgrLaunchAppByName2, with URI
+fallback only after a negative result. The main app renders before acknowledging,
+then targets RTPSVUPD1 for closure. This avoids leaving a suspended helper alive.
+The helper exits after acknowledgment, or stays visible on a 20-second timeout.
+No accepted launch is automatically resubmitted. Logs identify the helper version,
+route, promotion result and receipt. In-flight failures still require Vita testing.
+
+Package preparation now copies the helper, package heads and icon from the
+verified downloaded VPK, not the older running app. The staged helper's TITLE_ID,
+CONTENT_ID and APP_VER are validated before its promotion. Fixtures reject missing,
+wrong-title and wrong-version helpers, and assert the new helper bytes are used.
+
+Artwork source-file repair is retained. A version marker ensures one refresh per
+release even if promoter has already copied the images. A restart notice explains
+Shell's retained images. No direct database writes or forced restart are added.
+
+The app's extra imports grew the SCE metadata beyond its inter-segment gap.
+CMake derives a build-only linker script from the SDK's armvita.x, adding one
+64 KiB page before the data segment. This reserves conversion headroom without
+altering the installed SDK. It fails clearly if the expected script alignment is
+missing. The generated linker script and build outputs do not belong in Git.
+
+All host API checks are simulations; on-device launch, suspend/foreground transfer
+and display timing remain unverified for 1.1.6. Default-date TLS support remains
+pending and certificate/hostname verification stays enabled.
+
+Historical notes follow; the behavior above describes the current build.
+
+# Previous maintenance release 1.1.5 — launch handoff and artwork cache
 
 APP_VER 01.15, kernel major 1/minor 15; both title IDs are unchanged.
 `launch.c` shares process-start URI flags between the app and helper, preserving

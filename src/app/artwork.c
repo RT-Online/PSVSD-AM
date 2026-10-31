@@ -13,6 +13,7 @@
 #endif
 #define CACHE "ur0:appmeta/RTPSV0001"
 #define PENDING ACCESSORY_KERNEL_DIR "/artwork-pending"
+#define VERSION ACCESSORY_KERNEL_DIR "/artwork-version"
 static const char *files[]={"icon0.png","livearea/contents/template.xml",
     "livearea/contents/bg.png","livearea/contents/startup.png"};
 static int same(const char *a,const char *b) {
@@ -69,6 +70,13 @@ int am_artwork_refresh(void) {
         snprintf(target,sizeof(target),CACHE "/%s",files[i]);
         if (!same(source,target)) changed=1;
     }
+    char version[32]={0};FILE *saved=fopen(VERSION,"rb");
+    if (saved) {
+        size_t n=fread(version,1,sizeof(version)-1,saved);
+        if (ferror(saved) || n==sizeof(version)-1) changed=1;
+        if (fclose(saved)) changed=1;
+    }
+    if (strcmp(version,ACCESSORY_VERSION)) changed=1;
     FILE *pending=fopen(PENDING,"rb");
     if (pending) fclose(pending);
     if (!changed && !pending) return 0;
@@ -88,6 +96,8 @@ int am_artwork_refresh(void) {
     ret=sceLiveAreaReplaceAllForTitleSync("app0:sce_sys/livearea/contents","RTPSV0001",NULL);
     if (owned) sceSysmoduleUnloadModule(SCE_SYSMODULE_LIVEAREA);
     if (ret<0) return ret;
+    saved=fopen(VERSION,"wb");if (!saved) return -1;
+    ok=fputs(ACCESSORY_VERSION,saved)>=0;if (fclose(saved)) ok=0;if (!ok) return -1;
     if (remove(PENDING)) return -1;
     return 1;
 }
