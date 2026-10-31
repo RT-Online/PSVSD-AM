@@ -15,5 +15,6 @@ void accessory_session_run(AccessorySession *s);
 void accessory_session_refresh(AccessorySession *s);
 void accessory_session_clear_log(AccessorySession *s);
 typedef struct { int load,start,entry,unload; } AccessoryQuery;
+int accessory_original_prepare(uint32_t request_id,AccessoryQuery *result);
 int accessory_status_query(uint32_t request_id,AccessoryQuery *result);
 #endif

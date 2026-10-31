@@ -109,20 +109,24 @@ void accessory_session_clear_log(AccessorySession *s) {
     memset(s->text,0,sizeof(s->text));
 }
 
-int accessory_status_query(uint32_t request_id,AccessoryQuery *result) {
+static int storage_query(uint32_t request_id,uint32_t magic,AccessoryQuery *result) {
     AccessoryQuery q={-1,-1,-1,-1};
     int id=taiLoadKernelModule(AM_STATUS_STAGED,0,NULL);q.load=id;
     if (id<0) { if (result) *result=q;return id; }
-    AccessoryRequest request={ACCESSORY_REQUEST_MAGIC,request_id};
+    AccessoryRequest request={magic,request_id};
     tai_module_args_t args;memset(&args,0,sizeof(args));
     args.size=sizeof(args);args.pid=KERNEL_PID;args.args=sizeof(request);args.argp=&request;
     int entry=-1,ret=taiStartKernelModuleForUser(id,&args,NULL,&entry);
     q.start=ret;q.entry=ret>=0?entry:-1;
-    /* This reader installs no hooks, mappings or callbacks. It is unloadable. */
+    /* The nonresident query module installs no hooks/callbacks. An explicit
+     * original-storage request may ask the resident boot plugin to mount uma0. */
     q.unload=taiUnloadKernelModule(id,0,NULL);
     if (result) *result=q;
     return ret<0?ret:entry==1?0:(int)0x80010005;
 }
+
+int accessory_status_query(uint32_t request_id,AccessoryQuery *result) { return storage_query(request_id,ACCESSORY_REQUEST_MAGIC,result); }
+int accessory_original_prepare(uint32_t request_id,AccessoryQuery *result) { return storage_query(request_id,ACCESSORY_ORIGINAL_MAGIC,result); }
 
 void accessory_session_run(AccessorySession *s) {
     memset(s,0,sizeof(*s)); s->attempted=1;

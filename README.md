@@ -117,13 +117,32 @@ certificate and hostname verification remain enabled. Installer handoff and
 installation still require console testing; host checks cannot prove hardware
 or power-loss behavior. There is no login, token or telemetry.
 
-### Returning to other main storage
+### Switching storage in either direction
 
-Switching away from USB ux0 currently does not automatically verify or update
-PSVSD/AM and VitaShell on the storage that will become ux0. Keep those recovery
-tools installed and updated on that storage before changing the boot target.
-The new update checker does not resolve this separate preparation gap.
+When USB is being changed to ux0, the app copies PSVSD/AM and VitaShell from the
+current ux0 to verified USB uma0. When leaving USB ux0 (selecting USB uma0 or
+disabling automatic mounting), it exposes the exact pre-USB original storage at
+uma0 and copies those same two complete app folders back. Both directions stage,
+verify every file byte for byte, replace the full destination folders (including
+removal of stale destination-only files), verify again and block Save on errors.
+Other app folders and gamecard storage are not touched.
 
+The resident boot plugin captures the original storage's block paths before
+redirecting ux0. The app requests that specific storage; it does not guess from
+whatever volume happens to be mounted. An occupied or unverified uma0 is refused.
+The live USB ux0 mapping is retained throughout preparation; reboot applies the
+saved target. Missing original storage blocks Save instead of allowing an unsafe
+switch. Keep the original memory card inserted during this process.
+
+**One-time upgrade step for a system already using USB ux0:** install this revised
+1.1.3 build, leave the target at ux0 and use Save and Reboot once. That loads the
+updated boot plugin so it can capture the original storage. Then select uma0
+(or disable mounting) and Save and Reboot to perform the reverse copy. An old
+resident plugin cannot provide the new mapping information until rebooted.
+
+Version remains 1.1.3 by explicit request. Install manually if your installed
+version already reads 1.1.3; the version checker does not offer same-version
+replacements. Native/hardware return-storage mounting still requires Vita testing.
 
 Update-check failures now show the failed step, hexadecimal error, HTTP status
 and available TLS details directly on the Updates page. The Log refreshes after

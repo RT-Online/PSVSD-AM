@@ -34,9 +34,9 @@ static int copy_fail(Copy *c,const char *path,int ret) {
 static int path_join(char *out,size_t cap,const char *root,const char *rel) {
     int n=snprintf(out,cap,"%s/%s",root,rel);return n<0 || (size_t)n>=cap?COPY_ERROR:0;
 }
-static int usb_ready(void) {
+static int storage_ready(int restoring) {
     AmStatus s;am_status(&s);
-    return s.verified_mount && s.actual_target==AM_UMA0;
+    return s.verified_mount && (restoring?(s.actual_target==AM_UX0 && s.original_ready):s.actual_target==AM_UMA0);
 }
 static int folder(const char *path) {
     SceIoStat st;int r=sceIoGetstat(path,&st);
@@ -188,7 +188,7 @@ static int verify_tree(Copy *c,const char *root,const char *rel,unsigned depth,s
 static int verify_manifest(Copy *c,const char *root) {
     size_t seen=0;
     for (unsigned i=0;i<2;++i) {
-        if (!usb_ready()) return copy_fail(c,"USB mapping changed",COPY_ERROR);
+        if (!storage_ready(c->state.restoring)) return copy_fail(c,"Storage mapping changed",COPY_ERROR);
         int ret=verify_tree(c,root,copy_apps[i],0,&seen);
         if (ret<0) return ret;
     }
@@ -204,7 +204,7 @@ static int verify_all(Copy *c,int installed) {
     c->state.bytes_done=0;c->state.files_done=0;
     for (size_t i=0;i<c->count;++i) if (!c->items[i].dir) {
         char path[COPY_PATH],root[COPY_PATH];
-        if (!usb_ready()) return copy_fail(c,"USB mapping changed",COPY_ERROR);
+        if (!storage_ready(c->state.restoring)) return copy_fail(c,"Storage mapping changed",COPY_ERROR);
         if (installed) snprintf(root,sizeof(root),"uma0:app");
         else if (path_join(root,sizeof(root),c->staging,"new")<0) return COPY_ERROR;
         if (path_join(path,sizeof(path),root,c->items[i].path)<0) return COPY_ERROR;
@@ -214,7 +214,7 @@ static int verify_all(Copy *c,int installed) {
     return 0;
 }
 static int sync_usb(Copy *c,const char *phase,unsigned percent) {
-    if (!usb_ready()) return copy_fail(c,"USB mapping changed before flush",COPY_ERROR);
+    if (!storage_ready(c->state.restoring)) return copy_fail(c,"Storage mapping changed before flush",COPY_ERROR);
     publish_progress(c,phase,"uma0:",percent,0);
     int r=sceIoSync("uma0:",0);return r<0?copy_fail(c,phase,r):0;
 }
@@ -224,7 +224,7 @@ static int publish_all(Copy *c) {
     c->state.files_done=0;c->state.bytes_done=0;
     for (unsigned i=0;i<2;++i) {
         char target[COPY_PATH],fresh[COPY_PATH],old[COPY_PATH],root[COPY_PATH];
-        if (!usb_ready()) return copy_fail(c,"USB mapping changed",COPY_ERROR);
+        if (!storage_ready(c->state.restoring)) return copy_fail(c,"Storage mapping changed",COPY_ERROR);
         if (path_join(target,sizeof(target),"uma0:app",copy_apps[i])<0 ||
             path_join(root,sizeof(root),c->staging,"new")<0 || path_join(fresh,sizeof(fresh),root,copy_apps[i])<0 ||
             path_join(root,sizeof(root),c->staging,"old")<0 || path_join(old,sizeof(old),root,copy_apps[i])<0) return COPY_ERROR;
@@ -233,12 +233,12 @@ static int publish_all(Copy *c) {
         if (ret>=0) {
             if (!SCE_S_ISDIR(st.st_mode) && !SCE_S_ISREG(st.st_mode)) return copy_fail(c,target,COPY_ERROR);
             ret=parents(old);
-            if (ret>=0 && !usb_ready()) ret=COPY_ERROR;
+            if (ret>=0 && !storage_ready(c->state.restoring)) ret=COPY_ERROR;
             if (ret>=0) ret=sceIoRename(target,old);
             if (ret<0) return copy_fail(c,target,ret);
             c->old_moved|=1u<<i;
         } else if (ret!=COPY_ENOENT) return copy_fail(c,target,ret);
-        if (!usb_ready()) return copy_fail(c,"USB mapping changed",COPY_ERROR);
+        if (!storage_ready(c->state.restoring)) return copy_fail(c,"Storage mapping changed",COPY_ERROR);
         ret=sceIoRename(fresh,target);if (ret<0) return copy_fail(c,target,ret);
         c->published|=1u<<i;
         size_t prefix=strlen(copy_apps[i]);
@@ -256,14 +256,14 @@ static int rollback(Copy *c) {
         unsigned i=n-1,bit=1u<<i;
         if (!((c->published|c->old_moved)&bit)) continue;
         char target[COPY_PATH],fresh[COPY_PATH],old[COPY_PATH],root[COPY_PATH];
-        if (!usb_ready()) return COPY_ERROR;
+        if (!storage_ready(c->state.restoring)) return COPY_ERROR;
         if (path_join(target,sizeof(target),"uma0:app",copy_apps[i])<0 ||
             path_join(root,sizeof(root),c->staging,"new")<0 || path_join(fresh,sizeof(fresh),root,copy_apps[i])<0 ||
             path_join(root,sizeof(root),c->staging,"old")<0 || path_join(old,sizeof(old),root,copy_apps[i])<0) { failed=COPY_ERROR;continue; }
         /* Move the new tree aside rather than deleting files during recovery. */
         int ret=(c->published&bit)?sceIoRename(target,fresh):0;
         if (ret>=0 && (c->old_moved&bit)) {
-            ret=usb_ready()?sceIoRename(old,target):COPY_ERROR;
+            ret=storage_ready(c->state.restoring)?sceIoRename(old,target):COPY_ERROR;
         }
         if (ret<0) { failed=ret;am_log("USB folder rollback failed %s: %08X\n",target,(unsigned)ret); }
     }
@@ -285,22 +285,23 @@ static int remove_tree(const char *path,unsigned depth) {
     int closed=sceIoDclose(fd);if (ret>=0 && r<0) ret=r;if (ret>=0 && closed<0) ret=closed;
     return ret<0?ret:sceIoRmdir(path);
 }
-int am_prepare_usb_apps(AmCopyCallback progress,void *ctx,char *message,size_t cap) {
+static int prepare_apps(int restoring,AmCopyCallback progress,void *ctx,char *message,size_t cap) {
     if (!cap) return COPY_ERROR;
     message[0]=0;
-    if (!usb_ready()) { snprintf(message,cap,"USB must be verified at uma0 before copying.");return COPY_ERROR; }
+    if (!storage_ready(restoring)) { snprintf(message,cap,"Destination must be verified at uma0 before copying.");return COPY_ERROR; }
     Copy *c=calloc(1,sizeof(*c));if (!c) return COPY_ERROR;
+    c->state.restoring=restoring;
     c->progress=progress;c->ctx=ctx;c->first=malloc(COPY_CHUNK);c->second=malloc(COPY_CHUNK);
     int ret=0;
     if (!c->first || !c->second) { ret=COPY_ERROR;goto done; }
-    am_log("Preparing USB app folders: ux0:app to verified uma0:app; complete folders replaced; destination-only files removed.\n");
+    am_log("Preparing app folders: ux0:app to verified uma0:app; complete folders replaced; destination-only files removed.\n");
     if ((ret=scan(c,"RTPSV0001",0))<0 || (ret=scan(c,"VITASHELL",0))<0) goto done;
     const char *required[]={"RTPSV0001/eboot.bin","VITASHELL/eboot.bin"};
     for (unsigned n=0;n<2;++n) {
         int found=0;for (size_t i=0;i<c->count;++i) if (!c->items[i].dir && !strcmp(c->items[i].path,required[n])) found=1;
         if (!found) { ret=copy_fail(c,required[n],COPY_ENOENT);goto done; }
     }
-    if (!usb_ready()) { ret=copy_fail(c,"USB mapping changed before copy",COPY_ERROR);goto done; }
+    if (!storage_ready(c->state.restoring)) { ret=copy_fail(c,"Storage mapping changed before copy",COPY_ERROR);goto done; }
     const char *dirs[]={"uma0:data","uma0:data/PSVSD_AM"};
     for (unsigned i=0;i<2;++i) if ((ret=folder(dirs[i]))<0) { copy_fail(c,dirs[i],ret);goto done; }
     uint32_t token=sceKernelGetProcessTimeLow();
@@ -312,7 +313,7 @@ int am_prepare_usb_apps(AmCopyCallback progress,void *ctx,char *message,size_t c
     c->state.files_done=0;c->state.bytes_done=0;
     for (size_t i=0;i<c->count;++i) {
         char path[COPY_PATH],root[COPY_PATH];
-        if (!usb_ready()) { ret=copy_fail(c,"USB mapping changed",COPY_ERROR);goto done; }
+        if (!storage_ready(c->state.restoring)) { ret=copy_fail(c,"Storage mapping changed",COPY_ERROR);goto done; }
         if (path_join(root,sizeof(root),c->staging,"new")<0 || path_join(path,sizeof(path),root,c->items[i].path)<0) { ret=COPY_ERROR;goto done; }
         if (c->items[i].dir) { ret=parents(path);if (ret>=0) ret=folder(path); }
         else ret=stream_file(c,&c->items[i],path);
@@ -321,19 +322,19 @@ int am_prepare_usb_apps(AmCopyCallback progress,void *ctx,char *message,size_t c
     if ((ret=sync_usb(c,"Flushing copied files",45))<0 || (ret=verify_all(c,0))<0 || (ret=publish_all(c))<0 ||
         (ret=sync_usb(c,"Flushing installed files",75))<0 || (ret=verify_all(c,1))<0) goto done;
     publish_progress(c,"App folders verified", "Continuing Save",100,0);
-    am_log("USB app folders verified: %u files, %llu bytes.\n",c->state.total_files,(unsigned long long)c->state.total_bytes);
+    am_log("Destination app folders verified: %u files, %llu bytes.\n",c->state.total_files,(unsigned long long)c->state.total_bytes);
 done:
     if (ret<0) {
         /* Do not roll back or clean up through an unverified mount point. */
-        int restored=c->staging[0] && !usb_ready()?COPY_ERROR:rollback(c);
-        snprintf(message,cap,restored<0?"USB copy failed; recovery files retained. See Log.":"USB app copy failed (%08X). See Log.",(unsigned)ret);
-        am_log("USB app copy failed at %s: %08X; rollback=%08X\n",c->failure[0]?c->failure:c->state.path,(unsigned)ret,(unsigned)restored);
+        int restored=c->staging[0] && !storage_ready(c->state.restoring)?COPY_ERROR:rollback(c);
+        snprintf(message,cap,restored<0?"App copy failed; recovery files retained. See Log.":"App copy failed (%08X). See Log.",(unsigned)ret);
+        am_log("App copy failed at %s: %08X; rollback=%08X\n",c->failure[0]?c->failure:c->state.path,(unsigned)ret,(unsigned)restored);
         if (restored<0) {
             am_log("USB app recovery files retained: %s\n",c->staging);c->staging[0]=0;
         }
     }
     if (c->staging[0]) {
-        if (!usb_ready()) am_log("USB mapping no longer verified; staging retained at %s\n",c->staging);
+        if (!storage_ready(c->state.restoring)) am_log("Storage mapping no longer verified; staging retained at %s\n",c->staging);
         else {
             int clean=remove_tree(c->staging,0);
             if (clean<0) am_log("USB copy staging cleanup %s: %08X (files retained).\n",c->staging,(unsigned)clean);
@@ -342,3 +343,6 @@ done:
     for (size_t i=0;i<c->count;++i) free(c->items[i].path);
     free(c->items);free(c->first);free(c->second);free(c);return ret;
 }
+
+int am_prepare_usb_apps(AmCopyCallback progress,void *ctx,char *message,size_t cap) { return prepare_apps(0,progress,ctx,message,cap); }
+int am_prepare_original_apps(AmCopyCallback progress,void *ctx,char *message,size_t cap) { return prepare_apps(1,progress,ctx,message,cap); }

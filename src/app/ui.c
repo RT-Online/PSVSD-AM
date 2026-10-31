@@ -240,7 +240,7 @@ static void clear_log_confirmation(const AmUi *m) {
 }
 static void copy_view(const AmUi *m) {
     const AmCopyProgress *p=&m->copy;char b[160];
-    title("Preparing USB storage","Copying the PSVSD/AM and VitaShell app folders to uma0.");
+    title(m->copy.restoring?"Preparing original storage":"Preparing USB storage","Copying and verifying PSVSD/AM and VitaShell for the next ux0.");
     round_rect(270,205,640,257,12,CARD);
     text(290,224,1,ACCENT,p->phase);
     snprintf(b,sizeof(b),"%u%%",p->percent);text(884-width(b,2),220,2,TEXT,b);

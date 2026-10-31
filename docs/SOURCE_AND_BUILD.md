@@ -1,3 +1,18 @@
+# Current 1.1.3 reverse-storage preparation revision
+
+Explicitly retains version 1.1.3. One shared folder-copy implementation handles
+both directions, controlled by the progress state's restoring flag. Source is
+current ux0:app; destination is verified uma0:app. For the reverse direction the
+resident boot plugin captures the original ux0 block paths before USB redirection
+and exposes those exact paths at uma0 only on an explicit request. It refuses
+occupied destinations or stale ownership and retains live USB ux0 throughout.
+A private kernel-only export provides mount/query operations. The status module
+has a separate request magic for mounting; normal status queries remain read-only.
+The app copies/verifies both app folders before committing changed settings.
+See README for the required one-time boot-plugin refresh on older installations.
+Older notes about an unresolved reverse-copy gap below are superseded by this
+revision. Real Vita mapping and reverse preparation must still be tested.
+
 # Current release 1.1.3 — USB copy confirmation fix
 
 Semantic version 1.1.3, APP_VER 01.13, kernel metadata major 1/minor 13.

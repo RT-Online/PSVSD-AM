@@ -110,11 +110,23 @@ static int request_usb(void *ctx,char *message,size_t cap) {
     }
     return 0;
 }
+static int request_original(void *ctx,char *message,size_t cap) {
+    (void)ctx;model.copy_active=1;memset(&model.copy,0,sizeof(model.copy));model.copy.restoring=1;
+    snprintf(model.copy.phase,sizeof(model.copy.phase),"Finding original storage");draw();
+    uint32_t token=sceKernelGetProcessTimeLow();if (!token) token=1;
+    AccessoryQuery result;int ret=am_stage_status();
+    if (ret>=0) ret=accessory_original_prepare(token,&result);
+    query_status();
+    if (ret<0 || !model.status.original_ready) {
+        snprintf(message,cap,"Original storage unavailable. Save/reboot with USB ux0 once to refresh the boot plugin, then retry.");return -1;
+    }
+    return 0;
+}
 static int save(void) {
     model.busy=1;model.copy_active=0;model.message[0]=0;memset(&model.copy,0,sizeof(model.copy));draw();
     query_status();
     uint32_t last=0;
-    AmSaveCallbacks callbacks={copy_progress,request_usb,&last};
+    AmSaveCallbacks callbacks={copy_progress,request_usb,&last,request_original};
     int r=am_save_settings_with_callbacks(&model.pending,&callbacks,model.message,sizeof(model.message));
     model.copy_active=0;model.busy=0;
     if (r>=0) { model.saved=model.pending;model.dirty=0;model.reboot_pending=1; }

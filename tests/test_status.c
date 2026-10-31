@@ -20,6 +20,12 @@ int main(void) {
     reset();assert(module_start(0,NULL)==1 && !runtime_text[0]);
     reset();cfg.io_nid=0xBAD;query();assert(strstr(runtime_text,"Mount: none"));
     assert(module_stop(0,NULL)==SCE_KERNEL_STOP_SUCCESS);
+    reset();cfg.usb_after=0;mock_mount.dev=mock_mount.dev2=&usb_ux0;ux0_mounted=1;
+    original_export_present=original_export_ready=1;original_prepare_calls=0;
+    query();assert(strstr(runtime_text,"Original: uma0:") && !original_prepare_calls);
+    AccessoryRequest request={ACCESSORY_ORIGINAL_MAGIC,0x12345678};
+    assert(module_start(sizeof(request),&request)==1 && original_prepare_calls==1);
+    assert(strstr(runtime_text,"Original: uma0:") && strstr(runtime_text,"Request: 12345678"));++total_cases;
     printf("status: %d read-only mapping and stale/ambiguous-state cases passed\n",total_cases);
     return 0;
 }

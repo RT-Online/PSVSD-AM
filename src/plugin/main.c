@@ -73,6 +73,18 @@ static UsbmcIoDevice usb_ux0 = {
 static int redirected;
 static UsbmcIoDevice usb_uma[2];
 static int uma_owned;
+static char original_blocks[2][2][96];
+static UsbmcIoDevice original_uma[2];
+static int original_valid,original_owned;
+static void remember_original(UsbmcIoDevice *first,UsbmcIoDevice *second) {
+    UsbmcIoDevice *devices[]={first,second?second:first};original_valid=0;
+    for (unsigned i=0;i<2;++i) for (unsigned j=0;j<2;++j) {
+        const char *p=devices[i]?(j && devices[i]->blkdev2?devices[i]->blkdev2:devices[i]->blkdev):NULL;
+        if (!p || strncmp(p,"sdstor0:",8) || strstr(p,"sdstor0:uma-") || strlen(p)>=sizeof(original_blocks[i][j])) return;
+        memcpy(original_blocks[i][j],p,strlen(p)+1);
+    }
+    original_valid=1;
+}
 static const char *active_log_path = LOG_PATH;
 static SceUID resume_flag = -1, resume_thread = -1, resume_handler = -1;
 static unsigned resume_enabled, suspended, resume_epoch, resume_queued = 1;
@@ -459,6 +471,42 @@ fail:
     return 0;
 }
 
+/* Called only by the explicit original-storage request, or read-only query.
+ * The original block paths were captured before this module redirected ux0. */
+int psvsdam_original_storage(int mount) {
+    if (!redirected || !original_valid || !find_mount || !own_uma_mapping()) return 0;
+    UsbmcMountPoint *mp=find_mount(UMA0_MOUNT);
+    if (!mp || !mp->dev || !mp->dev2) return 0;
+    int matches=original_owned && mp->dev==&original_uma[0] && mp->dev2==&original_uma[1];
+    if (matches) {
+        for (unsigned i=0;i<2;++i) {
+            UsbmcIoDevice *d=i?mp->dev2:mp->dev;
+            if (!d->dev || strcmp(d->dev,"uma0:") || !d->blkdev || !d->blkdev2 ||
+                strcmp(d->blkdev,original_blocks[i][0]) || strcmp(d->blkdev2,original_blocks[i][1])) return 0;
+        }
+        return directory_exists("uma0:")?1:0;
+    }
+    if (!mount || original_owned || directory_exists("uma0:")) return 0;
+    UsbmcIoDevice *old1=mp->dev,*old2=mp->dev2;
+    if (!old1->dev || !old2->dev || strcmp(old1->dev,"uma0:") || strcmp(old2->dev,"uma0:")) return 0;
+    original_uma[0]=*old1;original_uma[1]=*old2;
+    for (unsigned i=0;i<2;++i) {
+        original_uma[i].blkdev=original_blocks[i][0];original_uma[i].blkdev2=original_blocks[i][1];
+    }
+    mp->dev=&original_uma[0];mp->dev2=&original_uma[1];
+    int ret=ksceIoMount(UMA0_MOUNT,NULL,0,0,0,0);
+    if (ret<0 || !directory_exists("uma0:")) {
+        if (ret>=0) ksceIoUmount(UMA0_MOUNT,0,0,0);
+        mp->dev=old1;mp->dev2=old2;return 0;
+    }
+    original_owned=1;log_line("Original pre-USB storage exposed at uma0 for recovery-app preparation.\n");return 1;
+}
+static int original_storage_query(int mount) {
+    int (*query)(int)=NULL;
+    if (module_get_export_func(KERNEL_PID,AM_KERNEL_NAME,TAI_ANY_LIBRARY,AM_ORIGINAL_EXPORT_NID,(uintptr_t *)&query)<0 || !query) return 0;
+    return query(mount)==1;
+}
+
 static int redirect_ux0(void) {
     if (directory_exists("uma0:")) {
         log_line("Secondary volume already mounted; refusing duplicate USB primary mount.\n");
@@ -472,6 +520,7 @@ static int redirect_ux0(void) {
         return -1;
     }
     UsbmcIoDevice *old_dev = mp->dev, *old_dev2 = mp->dev2;
+    remember_original(old_dev,old_dev2);
     mp->dev = mp->dev2 = &usb_ux0;
     ksceIoUmount(UX0_MOUNT, 0, 0, 0);
     ksceIoUmount(UX0_MOUNT, 1, 0, 0);
@@ -482,7 +531,7 @@ static int redirect_ux0(void) {
         mp->dev2 = old_dev2;
         int restore = ksceIoMount(UX0_MOUNT, NULL, 0, 0, 0, 0);
         log_line("Restore original ux0 mount: %08X\n", (unsigned)restore);
-        release_appmgr_patches();
+        original_valid=0;release_appmgr_patches();
         return ret;
     }
     redirected = 1;
@@ -612,7 +661,7 @@ static int secondary_boot_worker(SceSize argc, void *args) {
 
 int module_start(SceSize argc, void *args) {
     if (USBMC_STATUS_ONLY) {
-        if (argc!=sizeof(AccessoryRequest) || !args || ((AccessoryRequest *)args)->magic!=ACCESSORY_REQUEST_MAGIC)
+        if (argc!=sizeof(AccessoryRequest) || !args || (((AccessoryRequest *)args)->magic!=ACCESSORY_REQUEST_MAGIC && ((AccessoryRequest *)args)->magic!=ACCESSORY_ORIGINAL_MAGIC))
             return SCE_KERNEL_START_NO_RESIDENT;
         uint32_t token=((AccessoryRequest *)args)->request_id;
         const char *mount="none";
@@ -622,7 +671,8 @@ int module_start(SceSize argc, void *args) {
             if (uma && !ux) mount="uma0:";
             if (ux && !uma) mount="ux0:";
         }
-        char status[128];int n=snprintf(status,sizeof(status),"PSVSD/AM " ACCESSORY_VERSION "\nRequest: %08X\nMount: %s\n",token,mount);
+        int original=!strcmp(mount,"ux0:") && original_storage_query(((AccessoryRequest *)args)->magic==ACCESSORY_ORIGINAL_MAGIC);
+        char status[160];int n=snprintf(status,sizeof(status),"PSVSD/AM " ACCESSORY_VERSION "\nRequest: %08X\nMount: %s\nOriginal: %s\n",token,mount,original?"uma0:":"none");
         int fd=ksceIoOpen(ACCESSORY_KERNEL_DIR "/runtime.txt",SCE_O_WRONLY|SCE_O_CREAT|SCE_O_TRUNC,0666);
         if (fd>=0) { ksceIoWrite(fd,status,n);ksceIoClose(fd); }
         return SCE_KERNEL_START_NO_RESIDENT;

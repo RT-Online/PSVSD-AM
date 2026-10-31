@@ -14,7 +14,7 @@ static int load_calls,start_calls,unload_calls,cases;
 static struct {
     int source_missing,stage_fail,invalid_self,size_mismatch,short_io;
     int load_error,start_error,entry_error,missing_kernel,stale_kernel;
-    int user_log_fail,data_dir_fail,unsafe,write_zero,status_mode;
+    int user_log_fail,data_dir_fail,unsafe,write_zero,status_mode,original_mode;
 } cfg;
 static int sce_error(void) { return (int)(0x80010000u | (unsigned)errno); }
 static const char *mapped(const char *path,char out[512]) {
@@ -76,7 +76,7 @@ int taiLoadKernelModule(const char *path,int flags,void *opt) {
 int taiStartKernelModuleForUser(int id,tai_module_args_t *args,void *opt,int *result) {
     assert(id==42 && !opt && args->size==sizeof(*args) && args->pid==KERNEL_PID);
     assert(args->args==sizeof(AccessoryRequest));
-    AccessoryRequest *r=args->argp;assert(r && r->magic==ACCESSORY_REQUEST_MAGIC);
+    AccessoryRequest *r=args->argp;assert(r && r->magic==(cfg.original_mode?ACCESSORY_ORIGINAL_MAGIC:ACCESSORY_REQUEST_MAGIC));
     assert(r->request_id==0x12345678);++start_calls;
     if (cfg.start_error) return (int)0x8002D003;
     if (cfg.status_mode) { *result=cfg.entry_error?0:1;return 0; }
@@ -166,6 +166,9 @@ int main(void) {
     reset();cfg.status_mode=1;assert(accessory_status_query(0x12345678,NULL)==0 && unload_calls==1);
     reset();cfg.status_mode=1;cfg.start_error=1;assert(accessory_status_query(0x12345678,NULL)<0 && unload_calls==1);
     reset();cfg.status_mode=1;cfg.entry_error=1;assert(accessory_status_query(0x12345678,NULL)<0 && unload_calls==1);
+    reset();cfg.status_mode=cfg.original_mode=1;assert(accessory_original_prepare(0x12345678,NULL)==0 && unload_calls==1);
+    reset();cfg.status_mode=cfg.original_mode=1;cfg.start_error=1;assert(accessory_original_prepare(0x12345678,NULL)<0 && unload_calls==1);
+    reset();cfg.status_mode=cfg.original_mode=1;cfg.entry_error=1;assert(accessory_original_prepare(0x12345678,NULL)<0 && unload_calls==1);
     printf("app: %d loader/logging cases passed\n",cases);
-    assert(cases==22);return 0;
+    assert(cases==25);return 0;
 }

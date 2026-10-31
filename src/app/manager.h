@@ -7,7 +7,7 @@
 #include <stdint.h>
 typedef struct {
     int ux0,uma0,raw_usb,gamecard,loaded,legacy_loaded;
-    int actual_target,verified_mount;
+    int actual_target,verified_mount,original_ready;
     int module_id;
 } AmStatus;
 typedef struct {
@@ -16,8 +16,8 @@ typedef struct {
     char path[128];
 } AmTestResult;
 typedef void (*AmProgress)(unsigned percent,const char *stage,void *ctx);
-typedef int (*AmUsbRequest)(void *ctx,char *message,size_t cap);
-typedef struct { AmCopyCallback progress;AmUsbRequest request_usb;void *ctx; } AmSaveCallbacks;
+typedef int (*AmStorageRequest)(void *ctx,char *message,size_t cap);
+typedef struct { AmCopyCallback progress;AmStorageRequest request_usb;void *ctx;AmStorageRequest request_original; } AmSaveCallbacks;
 int am_read_text(const char *path,char *out,size_t cap);
 int am_read_log(const char *path,char *out,size_t cap);
 int am_load_settings(AmSettings *s);

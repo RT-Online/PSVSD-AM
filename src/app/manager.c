@@ -296,14 +296,14 @@ static int same_file(const char *a,const char *b) {
     int closed_in=sceIoClose(in),closed_out=sceIoClose(out);
     return same && closed_in>=0 && closed_out>=0;
 }
-static int prepared_usb_app(void) {
-    if (!present("uma0:app/VITASHELL/eboot.bin")) { am_log("USB app check: missing VitaShell executable.\n");return 0; }
+static int prepared_apps(void) {
+    if (!present("uma0:app/VITASHELL/eboot.bin")) { am_log("Destination app check: missing VitaShell executable.\n");return 0; }
     const char *files[]={"eboot.bin","psvsd_am.skprx","psvsd_am_status.skprx","usbmc_accessory_probe.skprx"};
     for (unsigned i=0;i<4;++i) {
         char source[128],target[128];
         snprintf(source,sizeof(source),"app0:%s",files[i]);
         snprintf(target,sizeof(target),"uma0:app/RTPSV0001/%s",files[i]);
-        if (!same_file(source,target)) { am_log("USB app check: missing or mismatched %s\n",target);return 0; }
+        if (!same_file(source,target)) { am_log("Destination app check: missing or mismatched %s\n",target);return 0; }
     }
     return 1;
 }
@@ -338,10 +338,30 @@ int am_save_settings_with_callbacks(const AmSettings *s,const AmSaveCallbacks *c
     if (s->enabled && storage_conflict(old_tai,boot_config,s->target,message,cap)) { ret=-1;goto done; }
     if (s->enabled && s->target==AM_UMA0) {
         AmStatus current;am_status(&current);
-        if (current.uma0 && !(current.verified_mount && current.actual_target==AM_UMA0)) {
+        if (current.uma0 && !(current.verified_mount && (current.actual_target==AM_UMA0 || (current.actual_target==AM_UX0 && current.original_ready)))) {
             ret=-1;snprintf(message,cap,"uma0 is already occupied. See Log.");
             am_log("Existing uma0 is not a freshly verified PSVSD/AM USB mount; preserving it.\n");goto done;
         }
+    }
+    AmStatus before;am_status(&before);
+    AmSettings saved;
+    if (!(s->enabled && s->target==AM_UX0) && am_load_settings(&saved)>=0 && saved.enabled && saved.target==AM_UX0 && !before.verified_mount) {
+        ret=-1;snprintf(message,cap,"Current USB mapping could not be verified. Settings unchanged. See Log.");goto done;
+    }
+    if (before.verified_mount && before.actual_target==AM_UX0 && !(s->enabled && s->target==AM_UX0)) {
+        if (!before.original_ready && callbacks && callbacks->request_original) {
+            ret=callbacks->request_original(callbacks->ctx,message,cap);if (ret<0) goto done;
+            am_status(&before);
+        }
+        if (!before.original_ready) {
+            ret=-1;snprintf(message,cap,"Original storage unavailable. Save/reboot with USB ux0 once to refresh the boot plugin, then retry.");goto done;
+        }
+        ret=am_prepare_original_apps(callbacks?callbacks->progress:NULL,callbacks?callbacks->ctx:NULL,message,cap);if (ret<0) goto done;
+        am_status(&before);
+        if (!before.original_ready || !configs_unchanged(old_tai,boot_config) || !prepared_apps()) {
+            ret=-1;snprintf(message,cap,"Apps could not be confirmed on original storage. Settings unchanged. See Log.");goto done;
+        }
+        if (s->enabled && storage_conflict(old_tai,boot_config,s->target,message,cap)) { ret=-1;goto done; }
     }
     if (s->enabled && s->target==AM_UX0) {
         AmStatus status;am_status(&status);
@@ -363,7 +383,7 @@ int am_save_settings_with_callbacks(const AmSettings *s,const AmSaveCallbacks *c
             }
             if (storage_conflict(old_tai,boot_config,s->target,message,cap)) { ret=-1;goto done; }
             am_status(&status);
-            if (!status.verified_mount || status.actual_target!=AM_UMA0 || !prepared_usb_app()) {
+            if (!status.verified_mount || status.actual_target!=AM_UMA0 || !prepared_apps()) {
                 ret=-1;snprintf(message,cap,"Copied apps could not be confirmed on USB. See Log.");goto done;
             }
         }
@@ -421,6 +441,7 @@ void am_status(AmStatus *s) {
             if (!strcmp(target,"uma0:") && s->uma0) s->actual_target=AM_UMA0;
             if (!strcmp(target,"ux0:") && s->ux0) s->actual_target=AM_UX0;
             s->verified_mount=s->actual_target>=0;
+            s->original_ready=s->verified_mount && s->actual_target==AM_UX0 && s->uma0 && strstr(runtime,"\nOriginal: uma0:\n")!=NULL;
         }
     }
 }

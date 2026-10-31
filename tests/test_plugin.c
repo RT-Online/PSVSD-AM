@@ -47,6 +47,7 @@ static void reset(void) {
     mock_mount.dev2 = &original2;
     log_fd = -1; appmgr_patches[0] = appmgr_patches[1] = -1;
     find_mount = NULL; redirected = 0;
+    original_valid=original_owned=0;
     uma_owned=0; active_log_path=LOG_PATH;
     resume_flag=resume_thread=resume_handler=-1;
     resume_enabled=suspended=resume_epoch=resume_count=0;resume_queued=1;
@@ -111,6 +112,12 @@ int ksceIoMount(int id, const char *p, int a, int b, int c, int d) {
         if (cfg.uma_other_error) return -55;
         const char *expected_primary = (cfg.raw_mask & 2) ? RAW_USB_PART : RAW_USB;
         const char *expected_fallback = (cfg.raw_mask & 1) ? RAW_USB : expected_primary;
+        if (mock_uma.dev==&original_uma[0]) {
+            assert(mock_uma.dev2==&original_uma[1]);
+            assert(!strcmp(mock_uma.dev->blkdev,original_blocks[0][0]));
+            if (cfg.uma_mount_fail) return -55;
+            uma_mounted=1;return 0;
+        }
         if (!resume_count) assert(mock_uma.dev == &usb_uma[0] && mock_uma.dev2 == &usb_uma[1]);
         assert(!strcmp(mock_uma.dev->blkdev,expected_primary));
         assert(!strcmp(mock_uma.dev2->blkdev2,expected_fallback));
@@ -148,6 +155,8 @@ static int mount_bootfs_mock(const char *path) {
     assert(!strcmp(path, "os0:kd/bootimage.skprx")); return cfg.boot_fail ? -1 : 0;
 }
 static int unmount_bootfs_mock(void) { return 0; }
+static int original_export_present,original_export_ready,original_prepare_calls;
+static int original_query_mock(int mount) { if (mount) ++original_prepare_calls;return original_export_ready; }
 int module_get_export_func(SceUID pid, const char *name, uint32_t lib,
                            uint32_t fn, uintptr_t *out) {
     assert(pid==KERNEL_PID);
@@ -155,6 +164,11 @@ int module_get_export_func(SceUID pid, const char *name, uint32_t lib,
         assert(lib==TAI_ANY_LIBRARY && fn==0xAA6D4409);
         if (cfg.accessory_lookup_fail) return -1;
         *out=(uintptr_t)ksceUsbServAccessoryActivate;return 0;
+    }
+    if (!strcmp(name,AM_KERNEL_NAME)) {
+        assert(lib==TAI_ANY_LIBRARY && fn==AM_ORIGINAL_EXPORT_NID);
+        if (!original_export_present) return -1;
+        *out=(uintptr_t)original_query_mock;return 0;
     }
     assert(!strcmp(name,"SceKernelModulemgr"));
     if (cfg.exports_fail) return -1;
@@ -383,6 +397,20 @@ int main(void) {
     if (!USBMC_ACCESSORY_PROBE) {
         reset();assert(initialize_runtime(0,NULL)==0 && redirected && resume_enabled);
         ux0_mounted=0;wake();assert(ux0_mounted && mount_ux0==2 && !mount_uma0 && activates==1);
+    }
+    if (USBMC_MANAGED_BOOT) {
+        reset();original1=(UsbmcIoDevice){"ux0:","exfatux0","sdstor0:xmc-lp-ign-userext","sdstor0:xmc-lp-ign-userext",UX0_MOUNT};original2=original1;
+        assert(initialize_runtime(0,NULL)==0 && redirected && original_valid);
+        assert(psvsdam_original_storage(0)==0 && !mount_uma0);
+        assert(psvsdam_original_storage(1)==1 && original_owned && uma_mounted);
+        assert(psvsdam_original_storage(0)==1 && mock_mount.dev==&usb_ux0);
+        mock_uma.dev=&original_uma1;assert(psvsdam_original_storage(0)==0);++total_cases;
+        reset();assert(initialize_runtime(0,NULL)==0 && original_valid);cfg.uma_exists=1;
+        assert(psvsdam_original_storage(1)==0 && mock_uma.dev==&original_uma1);++total_cases;
+        reset();assert(initialize_runtime(0,NULL)==0 && original_valid);cfg.uma_mount_fail=1;
+        assert(psvsdam_original_storage(1)==0 && mock_uma.dev==&original_uma1 && !original_owned);++total_cases;
+        reset();original1.blkdev=RAW_USB;assert(initialize_runtime(0,NULL)==0 && !original_valid);
+        assert(psvsdam_original_storage(1)==0);++total_cases;
     }
     printf("%s: %d host-mocked cases passed\n",USBMC_ACCESSORY_PROBE?"probe":"boot",total_cases);
     return 0;

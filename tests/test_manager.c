@@ -15,7 +15,7 @@ static int am_save_settings(const AmSettings *s,char *message,size_t cap) {
     return am_save_settings_with_callbacks(s,NULL,message,cap);
 }
 static int am_save_settings_with_progress(const AmSettings *s,AmCopyCallback progress,void *ctx,char *message,size_t cap) {
-    AmSaveCallbacks callbacks={progress,NULL,ctx};
+    AmSaveCallbacks callbacks={progress,NULL,ctx,NULL};
     return am_save_settings_with_callbacks(s,&callbacks,message,cap);
 }
 
@@ -23,6 +23,7 @@ static char root[160],fd_paths[2048][256];
 static int cases,progress_calls;
 static DIR *dir_handles[2048];
 static struct {
+    int hide_uma;
     int module,legacy,raw,partial,corrupt,full,sync_fail,write_failed,rename_failed;
     const char *fail_write,*fail_rename,*fail_remove;
     unsigned last_percent;
@@ -85,6 +86,7 @@ int sceIoRename(const char *a,const char *b) {
     char x[512],y[512];return rename(mapped(a,x),mapped(b,y))<0?err():0;
 }
 int sceIoDopen(const char *p) {
+    if (cfg.hide_uma && !strcmp(p,"uma0:")) return (int)0x80010002;
     char path[512];DIR *d=opendir(mapped(p,path));if (!d) return err();
     int fd=dirfd(d);assert(fd<2048 && !dir_handles[fd]);dir_handles[fd]=d;return fd;
 }
@@ -180,6 +182,10 @@ static int request_cb(void *ctx,char *message,size_t cap) {
         cfg.module=1;put(ACCESSORY_KERNEL_DIR "/runtime.txt","PSVSD/AM " ACCESSORY_VERSION "\nRequest: 00001234\nMount: uma0:\n");
     }
     return 0;
+}
+static int request_original_cb(void *ctx,char *message,size_t cap) {
+    (void)ctx;(void)message;(void)cap;++cfg.request_calls;cfg.hide_uma=0;
+    put(ACCESSORY_KERNEL_DIR "/runtime.txt","PSVSD/AM " ACCESSORY_VERSION "\nRequest: 00001234\nMount: ux0:\nOriginal: uma0:\n");return 0;
 }
 int main(void) {
     AmSettings s;AmTestResult r;AmStatus status;char message[192],out[65536],other[65536];
@@ -438,7 +444,7 @@ int main(void) {
     unsigned char chunk[8192];size_t position=0,amount;
     while ((amount=fread(chunk,1,sizeof(chunk),large_file))) { assert(!memcmp(chunk,big+position,amount));position+=amount; }
     assert(position==big_size && !ferror(large_file));fclose(large_file);free(big);
-    AmSaveCallbacks callbacks={copy_cb,request_cb,NULL};
+    AmSaveCallbacks callbacks={copy_cb,request_cb,NULL,NULL};
     reset();copy_fixture();cfg.module=0;s=(AmSettings){1,AM_UX0};
     assert(am_save_settings_with_callbacks(&s,&callbacks,message,sizeof(message))==0 && cfg.request_calls==1 && cfg.copy_percent==100);
     reset();copy_fixture();cfg.module=0;cfg.request_error=1;s=(AmSettings){1,AM_UX0};
@@ -494,13 +500,50 @@ int main(void) {
     assert(am_load_settings(&s)==0 && s.enabled && s.target==AM_UX0);
     assert(same_file("app0:eboot.bin","uma0:app/RTPSV0001/eboot.bin"));++cases;
     payload[large_size-1]^=1;fixture("uma0:app/RTPSV0001/eboot.bin",payload,large_size);
-    assert(!prepared_usb_app());++cases;
+    assert(!prepared_apps());++cases;
     fixture("uma0:app/RTPSV0001/eboot.bin",payload,large_size-1);
-    assert(!prepared_usb_app());++cases;
+    assert(!prepared_apps());++cases;
     fixture("uma0:app/RTPSV0001/eboot.bin",payload,large_size);
     cfg.fail_open="uma0:app/RTPSV0001/eboot.bin";
-    assert(!prepared_usb_app());++cases;
+    assert(!prepared_apps());++cases;
     free(payload);
+    for (int disabled=0;disabled<2;++disabled) {
+        reset();copy_fixture();cfg.partial=1;
+        put(ACCESSORY_KERNEL_DIR "/runtime.txt","PSVSD/AM " ACCESSORY_VERSION "\nRequest: 00001234\nMount: ux0:\nOriginal: uma0:\n");
+        s=(AmSettings){!disabled,AM_UMA0};
+        assert(am_save_settings(&s,message,sizeof(message))==0);
+        get("uma0:app/RTPSV0001/eboot.bin",other);assert(!strcmp(other,"app"));
+        get("uma0:app/VITASHELL/eboot.bin",other);assert(!strcmp(other,"shell"));
+        assert(!local_exists("uma0:app/VITASHELL/user-extra"));
+        assert(am_load_settings(&s)==0 && s.enabled==!disabled && s.target==AM_UMA0);++cases;
+    }
+    reset();copy_fixture();cfg.hide_uma=1;
+    put(ACCESSORY_KERNEL_DIR "/runtime.txt","PSVSD/AM " ACCESSORY_VERSION "\nRequest: 00001234\nMount: ux0:\nOriginal: none\n");
+    AmSaveCallbacks reverse={copy_cb,NULL,NULL,request_original_cb};s=(AmSettings){1,AM_UMA0};
+    assert(am_save_settings_with_callbacks(&s,&reverse,message,sizeof(message))==0 && cfg.request_calls==1);++cases;
+    for (int failure=0;failure<3;++failure) {
+        reset();copy_fixture();
+        put(ACCESSORY_KERNEL_DIR "/runtime.txt","PSVSD/AM " ACCESSORY_VERSION "\nRequest: 00001234\nMount: ux0:\nOriginal: uma0:\n");
+        if (failure==0) cfg.copy_corrupt=1;
+        if (failure==1) cfg.sync_fail=1;
+        if (failure==2) cfg.lose_usb=1;
+        s=(AmSettings){1,AM_UMA0};
+        assert(am_save_settings_with_callbacks(&s,&reverse,message,sizeof(message))<0 && !local_exists(AM_SETTINGS_PATH));++cases;
+    }
+    reset();copy_fixture();
+    put(ACCESSORY_KERNEL_DIR "/runtime.txt","PSVSD/AM " ACCESSORY_VERSION "\nRequest: 00001234\nMount: ux0:\nOriginal: none\n");s=(AmSettings){1,AM_UMA0};
+    assert(am_save_settings(&s,message,sizeof(message))<0 && !local_exists(AM_SETTINGS_PATH));
+    get("uma0:app/RTPSV0001/eboot.bin",other);assert(!strcmp(other,"old app"));++cases;
+    reset();copy_fixture();payload=malloc(large_size);assert(payload);memset(payload,0x6d,large_size);
+    fixture("app0:eboot.bin",payload,large_size);fixture("ux0:app/RTPSV0001/eboot.bin",payload,large_size);cfg.partial=1;
+    put(ACCESSORY_KERNEL_DIR "/runtime.txt","PSVSD/AM " ACCESSORY_VERSION "\nRequest: 00001234\nMount: ux0:\nOriginal: uma0:\n");
+    s=(AmSettings){1,AM_UMA0};assert(am_save_settings(&s,message,sizeof(message))==0 && prepared_apps());++cases;
+    payload[large_size-1]^=1;fixture("uma0:app/RTPSV0001/eboot.bin",payload,large_size);
+    assert(!prepared_apps());free(payload);++cases;
+    reset();copy_fixture();put(AM_SETTINGS_PATH,"version=1\nenabled=1\nmount=ux0\n");
+    put(ACCESSORY_KERNEL_DIR "/runtime.txt","PSVSD/AM " ACCESSORY_VERSION "\nRequest: 00009999\nMount: ux0:\nOriginal: uma0:\n");s=(AmSettings){1,AM_UMA0};
+    assert(am_save_settings(&s,message,sizeof(message))<0);assert(am_load_settings(&s)==0 && s.target==AM_UX0);
+    get("uma0:app/RTPSV0001/eboot.bin",other);assert(!strcmp(other,"old app"));++cases;
     printf("manager: %d configuration/status/read-write cases passed\n",cases);
     return 0;
 }
