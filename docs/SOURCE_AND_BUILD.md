@@ -1,4 +1,33 @@
-# Current maintenance release 1.1.4 — installer cleanup
+# Current maintenance release 1.1.5 — launch handoff and artwork cache
+
+APP_VER 01.15, kernel major 1/minor 15; both title IDs are unchanged.
+`launch.c` shares process-start URI flags between the app and helper, preserving
+negative API results. This follows the VitaSDK appmgr.h requirement of 0x20000;
+other flags open LiveArea. The helper shows a frame before closing the old app,
+keeps drawing while its worker promotes, checks return-launch failure and offers
+an explicit retry rather than silently exiting. Helper diagnostics are imported
+by the main app on its next launch. Cleanup still uses bounded delayed retries.
+
+`artwork.c` only handles four fixed files under this title's appmeta directory.
+Each changed file uses a verified temporary copy and rename. A durable pending
+marker is set before changes and retained on failure. After copying, the owned
+LiveArea module is loaded as needed and the explicit-title synchronous replace
+API is called with installed `app0:sce_sys/livearea/contents`. Already-loaded
+modules are retained. No SQL edits, app deletion or global rebuild is performed.
+This does not itself invalidate Shell's separate rendered-bubble memory/cache.
+
+SDK references: https://docs.vitasdk.org/group__SceAppMgrUser.html and
+https://docs.vitasdk.org/group__SceLiveAreaUtilUser.html .
+
+Host checks cover both launch targets/flags and failure propagation, cache
+replacement, no-op on unchanged files, failed refresh retry, module ownership
+and preservation of a cached icon when its source is missing. These are mocked
+API checks, not console validation. Arbitrary-date TLS and complete rendered-icon
+invalidation remain unresolved; certificate and hostname validation stay enabled.
+
+Older notes below describe the development history, not additional current steps.
+
+# Previous maintenance release 1.1.4 — installer cleanup
 
 Bumped app/package/module metadata and artwork to 1.1.4 / APP_VER 01.14. The main
 app discovers a leftover RTPSVUPD1 installation on startup, including leftovers

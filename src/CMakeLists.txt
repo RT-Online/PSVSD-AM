@@ -6,7 +6,7 @@ if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     message(FATAL_ERROR "Set VITASDK to your VitaSDK installation")
   endif()
 endif()
-project(psvsd_am VERSION 1.1.4 LANGUAGES C)
+project(psvsd_am VERSION 1.1.5 LANGUAGES C)
 include("${VITASDK}/share/vita.cmake" REQUIRED)
 set(CMAKE_C_STANDARD 99)
 
@@ -42,24 +42,24 @@ foreach(mode IN ITEMS psvsd_am usbmc_accessory_probe psvsd_am_status)
   clean_vita_self(${mode}.skprx ${mode} CONFIG ${exports} UNSAFE)
 endforeach()
 
-add_executable(psvsd_am_app app/main.c app/session.c app/manager.c app/prepare.c app/ui.c app/controller.c app/touch.c app/updates.c app/update_network.c app/update_install.c app/package.c app/package_metadata.c vendor/minizip/unzip.c vendor/minizip/ioapi.c common/settings.c)
+add_executable(psvsd_am_app app/main.c app/session.c app/manager.c app/prepare.c app/ui.c app/controller.c app/touch.c app/updates.c app/update_network.c app/update_install.c app/launch.c app/artwork.c app/package.c app/package_metadata.c vendor/minizip/unzip.c vendor/minizip/ioapi.c common/settings.c)
 target_compile_definitions(psvsd_am_app PRIVATE IOAPI_NO_64)
 target_compile_options(psvsd_am_app PRIVATE -Wall -Wextra -Werror -O2 -fno-builtin-printf)
 target_link_libraries(psvsd_am_app SceDisplay_stub SceCtrl_stub SceProcessmgr_stub
-  SceIofilemgr_stub SceLibKernel_stub SceVshBridge_stub ScePower_stub SceTouch_stub SceNet_stub SceNetCtl_stub SceAppMgr_stub ScePromoterUtil_stub SceSysmodule_stub taihen_stub
+  SceIofilemgr_stub SceLibKernel_stub SceVshBridge_stub ScePower_stub SceTouch_stub SceLiveArea_stub SceNet_stub SceNetCtl_stub SceAppMgr_stub ScePromoterUtil_stub SceSysmodule_stub taihen_stub
   -Wl,--start-group curl mbedtls mbedx509 mbedcrypto everest p256m z zstd pthread -Wl,--end-group)
 clean_vita_self(psvsd_am_app.self psvsd_am_app UNSAFE)
-add_executable(psvsd_am_installer app/installer_main.c app/package.c app/package_metadata.c app/ui.c app/updates.c common/settings.c)
+add_executable(psvsd_am_installer app/installer_main.c app/launch.c app/package.c app/package_metadata.c app/ui.c app/updates.c common/settings.c)
 target_compile_options(psvsd_am_installer PRIVATE -Wall -Wextra -Werror -O2 -ffunction-sections -fdata-sections)
 target_link_options(psvsd_am_installer PRIVATE -Wl,--gc-sections)
 target_link_libraries(psvsd_am_installer SceAppMgr_stub ScePromoterUtil_stub SceSysmodule_stub SceDisplay_stub SceCtrl_stub SceLibKernel_stub SceIofilemgr_stub SceProcessmgr_stub)
 clean_vita_self(psvsd_am_installer.self psvsd_am_installer UNSAFE)
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/installer.sfo"
-  COMMAND "${VITASDK}/bin/vita-mksfoex" -s TITLE_ID=RTPSVUPD1 -s APP_VER=01.14
+  COMMAND "${VITASDK}/bin/vita-mksfoex" -s TITLE_ID=RTPSVUPD1 -s APP_VER=01.15
     -s CONTENT_ID=HB0001-RTPSVUPD1_00-0000000000000000 "PSVSD/AM Installer" "${CMAKE_CURRENT_BINARY_DIR}/installer.sfo")
 add_custom_target(installer_sfo DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/installer.sfo")
 vita_create_vpk(PSVSD_AM.vpk RTPSV0001 psvsd_am_app.self
-  VERSION 01.14 NAME "PSVSD/AM"
+  VERSION 01.15 NAME "PSVSD/AM"
   FILE "${CMAKE_CURRENT_BINARY_DIR}/psvsd_am_installer.self" installer/eboot.bin
   FILE "${CMAKE_CURRENT_BINARY_DIR}/installer.sfo" installer/param.sfo
   FILE "${CMAKE_CURRENT_SOURCE_DIR}/../assets/updater/head.bin" installer/head.bin

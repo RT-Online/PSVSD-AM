@@ -111,6 +111,10 @@ int main(int argc,char **argv) {
     am_ui_render(buffer.pixels,&m);if (argc>1) dump(argv[1],"InstallerSharedUI");
     m.update_progress=(AmUpdateProgress){AM_UPDATE_COMPLETE,1,1};
     am_ui_render(buffer.pixels,&m);if (argc>1) dump(argv[1],"InstallerComplete");
+    m.update_progress=(AmUpdateProgress){AM_UPDATE_INSTALL_ERROR,0,0};m.update.error=-123;
+    strcpy(m.update.stage,"Could not reopen PSVSD/AM");
+    strcpy(m.update.reason,"Press X to retry opening PSVSD/AM.\nThe installer will stay open.");
+    am_ui_render(buffer.pixels,&m);if (argc>1) dump(argv[1],"InstallerRelaunchError");
     m.update_progress=(AmUpdateProgress){AM_UPDATE_VERIFY,0xffffffffu,1};am_ui_render(buffer.pixels,&m);
     for (unsigned i=0;i<16;++i) assert(buffer.before[i]==0xDEADBEEF && buffer.after[i]==0xDEADBEEF);
     puts("ui: menu/log pages, render bounds, save choices, Circle/clear confirmation and busy copy/verification views passed");

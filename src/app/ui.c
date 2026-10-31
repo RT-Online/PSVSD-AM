@@ -91,7 +91,7 @@ static void update_progress_view(const AmUi *m) {
     const AmUpdateProgress *p=&m->update_progress;
     const char *phase=p->phase==AM_UPDATE_VERIFY?"Verifying download":p->phase==AM_UPDATE_EXTRACT?"Extracting update":
         p->phase==AM_UPDATE_PREPARE?"Preparing installer":p->phase==AM_UPDATE_SYSTEM_INSTALL?"Installing update":
-        p->phase==AM_UPDATE_COMPLETE?"Update installed":p->phase==AM_UPDATE_INSTALL_ERROR?"Installation failed":"Downloading update";
+        p->phase==AM_UPDATE_COMPLETE?"Update installed":p->phase==AM_UPDATE_INSTALL_ERROR?(m->update.stage[0]?m->update.stage:"Installation failed"):"Downloading update";
     round_rect(270,205,640,257,12,CARD);text(290,224,1,ACCENT,phase);
     unsigned done=p->total && p->done>p->total?p->total:p->done;
     char detail[160];
@@ -105,7 +105,7 @@ static void update_progress_view(const AmUi *m) {
     else if (p->phase==AM_UPDATE_DOWNLOAD) snprintf(detail,sizeof(detail),"%.2f MiB received - waiting for total size",done/1048576.0);
     else snprintf(detail,sizeof(detail),"Please wait...");
     text(290,295,0,TEXT,detail);
-    wrapped(290,338,p->phase==AM_UPDATE_INSTALL_ERROR?"Press X to return to PSVSD/AM. Details are saved in the update log.":
+    wrapped(290,338,p->phase==AM_UPDATE_INSTALL_ERROR?(m->update.reason[0]?m->update.reason:"Press X to return to PSVSD/AM. Details are saved in the update log."):
         "Keep the system powered on.\nPSVSD/AM will reopen when finished.",594,3,0,MUTED);
     round_rect(290,420,594,12,5,BORDER);
     if (p->total) round_rect(290,420,(int)((uint64_t)594*done/p->total),12,5,ACCENT);

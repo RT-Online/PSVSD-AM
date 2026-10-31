@@ -4,7 +4,7 @@
 
 AI tools assisted with code development, documentation, and testing. RefurbedTech directed development and performed hardware testing.
 
-Version **1.1.4** · Vita title ID **RTPSV0001** · Package version **01.14**
+Version **1.1.5** · Vita title ID **RTPSV0001** · Package version **01.15**
 
 ## Features
 
@@ -66,7 +66,7 @@ The three kernel payloads are intentional: `psvsd_am.skprx` is the boot plugin, 
 
 ## Validation and license
 
-Host checks: `sh tests/run_tests.sh`. These exercise control flow with mocked Vita APIs; they cannot prove hardware behavior, private firmware offsets or power-loss recovery. Original hardware reports confirmed secondary file transfers/standby recovery and primary mounting. Version 1.1.4 has passed the host suite, a native VitaSDK build and static import checks; console testing is pending.
+Host checks: `sh tests/run_tests.sh`. These exercise control flow with mocked Vita APIs; they cannot prove hardware behavior, private firmware offsets or power-loss recovery. Original hardware reports confirmed secondary file transfers/standby recovery and primary mounting. Version 1.1.5 has passed the host suite, a native VitaSDK build and static import checks; console testing is pending.
 
 GPL-3.0-or-later; see [COPYING](COPYING) and [third-party notices](docs/THIRD_PARTY_NOTICES.md). Derived from USBMC by Yifan Lu and VitaShell storage code by TheFloW. Font and taiHEN SDK components retain their own licenses.
 
@@ -106,11 +106,11 @@ The separate main-storage preparation limitation below still applies. Release
 checks compare numeric versions, optionally prefixed by `v` or `v.`. Supported
 Vita APP_VER mapping is MAJOR.(MINOR*10+PATCH), with minor/patch each 0–9.
 
-Users of check-only builds must install the VPK manually once. The revised
-1.1.0 build with the optional installer can offer 1.1.4 after its GitHub release
-is published with the VPK asset. Subsequent higher-version releases can use the
-optional in-app flow. Publishing a new asset under the same
-version does not trigger an update offer on an already matching version.
+Install 1.1.5 manually through VitaShell once if your existing updater stops at
+LiveArea or requires you to launch its installer manually. The old installed code
+controls that first handoff, so a new downloaded VPK cannot repair it in advance.
+Once 1.1.5 is running, future higher-version updates use the corrected automatic
+launch flags in both directions. Same-version releases are not offered again.
 
 The default/arbitrary system-date compatibility change is still pending. TLS
 certificate and hostname verification remain enabled. Installer handoff and
@@ -135,14 +135,13 @@ saved target. Missing original storage blocks Save instead of allowing an unsafe
 switch. Keep the original memory card inserted during this process.
 
 **One-time upgrade step for a system already using USB ux0:** install this revised
-1.1.4 build, leave the target at ux0 and use Save and Reboot once. That loads the
+1.1.5 build, leave the target at ux0 and use Save and Reboot once. That loads the
 updated boot plugin so it can capture the original storage. Then select uma0
 (or disable mounting) and Save and Reboot to perform the reverse copy. An old
 resident plugin cannot provide the new mapping information until rebooted.
 
-Version remains 1.1.4 by explicit request. Install manually if your installed
-version already reads 1.1.4; the version checker does not offer same-version
-replacements. Native/hardware return-storage mounting still requires Vita testing.
+The version checker does not offer same-version replacements. Native/hardware
+return-storage mounting still requires Vita testing.
 
 Update-check failures now show the failed step, hexadecimal error, HTTP status
 and available TLS details directly on the Updates page. The Log refreshes after
@@ -153,7 +152,7 @@ are reported on screen. Offline skips remain silent.
 
 ### Bundled TLS — no iTLS-Enso requirement
 
-The current 1.1.4 build includes libcurl, Mbed TLS and a Mozilla CA bundle inside
+The current 1.1.5 build includes libcurl, Mbed TLS and a Mozilla CA bundle inside
 the VPK. Update checks no longer use the Vita's system HTTPS implementation.
 Users do not need to install iTLS-Enso or modify system certificates. TLS 1.2 or
 newer, certificate-chain validation and hostname verification remain required.
@@ -162,8 +161,33 @@ settings. If it fails, the Updates page includes a readable libcurl error reason
 
 ### Temporary installer cleanup
 
-Version 1.1.4 delays removal of the temporary installer until after the app has
+Version 1.1.5 delays removal of the temporary installer until after the app has
 reopened, retries failures and discovers leftover installers on later launches.
 Cleanup is paused while an update or other busy operation is active. Failed
 cleanup is logged and retried next launch. The temporary helper is still used
 for installation, so its bubble may briefly appear during the handoff.
+
+### Artwork cache refresh (1.1.5)
+
+On launch, PSVSD/AM compares its icon and three LiveArea files against this title's
+`ur0:appmeta/RTPSV0001` copies. Changed files are staged, byte checked and replaced.
+It then asks the system to replace this title's LiveArea from the installed assets.
+A pending marker preserves retry after failure; errors are recorded in Log.
+Unchanged successful copies skip the refresh. This runs after either an update or
+a storage change and never deletes the app or rebuilds the application database.
+
+The cached source images and the home screen's rendered bubble are distinct.
+This change repairs the former and requests LiveArea replacement; it does not
+write the private rendered-icon database or promise immediate in-memory bubble
+invalidation. Check the bubble and LiveArea after returning home; if the bubble
+remains stale, restart the system once and report the result. Console validation
+is still required before claiming the entire cache issue resolved.
+
+### Updater handoff diagnostics (1.1.5)
+
+Both launches request process start (`0x20000`) instead of LiveArea-only flags.
+The main app remains open on a reported installer-launch failure. The installer
+presents its progress before system promotion, logs install and relaunch results,
+and stays open with an X-to-retry message if reopening the main app fails.
+A successful launch is submitted once. The next app launch imports the helper's
+`ux0:data/PSVSD_Accessory/update/handoff.log` into the application Log.

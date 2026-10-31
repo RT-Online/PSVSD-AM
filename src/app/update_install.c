@@ -107,6 +107,3 @@ int am_update_prepare(const char *version,char *reason,unsigned cap,AmUpdateProg
 bad:
     remove(AM_UPDATE_ROOT "/ready");snprintf(reason,cap,"Package validation or installer preparation failed. Existing app retained.");return -1;
 }
-int am_update_launch_installer(void) {
-    return sceAppMgrLaunchAppByUri(0xFFFFF,"psgm:play?titleid=RTPSVUPD1");
-}

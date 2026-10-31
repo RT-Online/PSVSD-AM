@@ -12,6 +12,7 @@
 #include "session.h"
 #include "touch.h"
 #include "update_install.h"
+#include "artwork.h"
 #include <psp2/io/stat.h>
 
 static AmUi model;
@@ -218,7 +219,11 @@ static void finish_update_check(void) {
         if (model.update.state==UPDATE_READY) {
             int ret=am_update_launch_installer();
             if (ret>=0) sceKernelExitProcess(0);
+            model.update.state=UPDATE_ERROR;model.update.error=ret;
+            snprintf(model.update.stage,sizeof(model.update.stage),"Launch installer");
+            snprintf(model.update.reason,sizeof(model.update.reason),"Could not start the installer. The current app remains open.");
             snprintf(model.message,sizeof(model.message),"Installer launch failed: %08X",(unsigned)ret);
+            update_report();
             am_log("Installer launch failed: %08X\n",(unsigned)ret);
         }
         update_installing=0;
@@ -271,6 +276,13 @@ int main(void) {
     if (loaded<0) snprintf(model.message,sizeof(model.message),"Settings unreadable; automatic mounting defaults off.");
     query_status();refresh_log();
     am_log("Opened PSVSD/AM " ACCESSORY_VERSION "; saved enabled=%d target=%s\n",model.saved.enabled,am_target_name(model.saved.target));
+    int artwork=am_artwork_refresh();
+    am_log("Artwork cache refresh: %08X\n",(unsigned)artwork);
+    if (artwork<0) snprintf(model.message,sizeof(model.message),"Artwork refresh failed (%08X). See Log.",(unsigned)artwork);
+    char handoff[512];
+    if (am_read_text(AM_UPDATE_ROOT "/handoff.log",handoff,sizeof(handoff))>=0) {
+        am_log("Updater handoff:\n%s\n",handoff);remove(AM_UPDATE_ROOT "/handoff.log");
+    }
     SceTouchPanelInfo panel;memset(&panel,0,sizeof(panel));
     previous_touch_valid=sceTouchGetSamplingState(SCE_TOUCH_PORT_FRONT,&previous_touch_state)>=0;
     int touch_start=sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT,SCE_TOUCH_SAMPLING_STATE_START);

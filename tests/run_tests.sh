@@ -39,9 +39,13 @@ ASAN_OPTIONS=detect_leaks=0 "$test_out/test_updates" ${PSVSD_AM_RELEASE_FIXTURE:
 cc -std=c99 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
   -DPSVSD_AM_HOST_TEST=1 -D_POSIX_C_SOURCE=200809L -DIOAPI_NO_64 -I"$test_dir" \
   "$test_dir/test_update_install.c" "$test_dir/../src/app/update_install.c" \
-  "$test_dir/../src/app/package_metadata.c" "$test_dir/../src/vendor/minizip/unzip.c" \
+  "$test_dir/../src/app/launch.c" "$test_dir/../src/app/package_metadata.c" "$test_dir/../src/vendor/minizip/unzip.c" \
   "$test_dir/../src/vendor/minizip/ioapi.c" -lz -o "$test_out/test_update_install"
 python3 "$test_dir/make_update_fixtures.py" "$test_out/install"
 for fixture in good traversal duplicate wrong_title wrong_version oversize truncated crc symlink; do
   ASAN_OPTIONS=detect_leaks=0 "$test_out/test_update_install" "$test_out/install" "$fixture"
 done
+cc -std=c99 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
+  -DPSVSD_AM_HOST_TEST=1 -I"$test_dir" "$test_dir/test_artwork.c" \
+  "$test_dir/../src/app/artwork.c" -o "$test_out/test_artwork"
+ASAN_OPTIONS=detect_leaks=0 "$test_out/test_artwork"

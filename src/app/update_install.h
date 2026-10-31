@@ -8,6 +8,7 @@
 #define AM_UPDATE_HELPER AM_UPDATE_ROOT "/helper"
 int am_update_prepare(const char *version,char *reason,unsigned cap,AmUpdateProgressCallback progress,void *context);
 int am_update_launch_installer(void);
+int am_update_launch_app(void);
 int am_package_remove_helper(void);
 int am_package_promote(const char *path);
 int am_package_validate(const char *path,const char *expected);
