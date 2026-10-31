@@ -480,6 +480,9 @@ int main(void) {
         get("uma0:app/RTPSV0001/eboot.bin",other);assert(!strcmp(other,"old app"));
         get("uma0:app/VITASHELL/user-extra",other);assert(!strcmp(other,"keep this extra destination file"));
     }
+    reset();
+    assert(am_export_report("Step: Send HTTPS request\nError: 80431075",message,sizeof(message))==0);
+    get(ACCESSORY_USER_LOG,other);assert(strstr(other,"Send HTTPS request") && strstr(other,"80431075"));
     printf("manager: %d configuration/status/read-write cases passed\n",cases);
     return 0;
 }

@@ -1,3 +1,11 @@
+# Current release: 1.1.0
+
+App semantic version: 1.1.0. Vita package APP_VER: 01.10. Kernel module metadata:
+major 1, minor 1. Title ID remains RTPSV0001. Current source includes bundled
+TLS, silent offline checks, readable diagnostics and v. release-tag support.
+The default/arbitrary system-date compatibility change is still pending.
+Earlier validation entries below describe the 1.0.x development history.
+
 # Source and build
 
 ## Build the app and all three kernel payloads
@@ -7,6 +15,7 @@ Install VitaSDK, then run from the repository root:
 ```sh
 export VITASDK=/path/to/vitasdk
 export PATH="$VITASDK/bin:$PATH"
+python3 tools/install_update_deps.py
 cmake -S src -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ```
@@ -65,9 +74,9 @@ Keep generated VPK/SKPRX binaries and their checksums in GitHub Releases. Commit
 
 ## Version metadata
 
-The app and diagnostic reports identify semantic version **1.0.3**. Vita's
-two-part package APP_VER is **01.03**; kernel module metadata is major 1,
-minor 3. These two-part fields do not express a semantic patch separately.
+The app and diagnostic reports identify semantic version **1.1.0**. Vita's
+two-part package APP_VER is **01.10**; kernel module metadata is major 1,
+minor 1. These two-part fields do not express a semantic patch separately.
 The settings schema remains `version=1`, and LiveArea XML remains format
 `01.00`; neither is the software release number.
 
@@ -162,3 +171,44 @@ shows neutral status only; connection instructions were removed. Startup remains
 on Overview, with no automatic update check or Wi-Fi connection dialog invoked
 by the app. Native build, import/package checks and host regressions were rerun.
 Console confirmation remains pending.
+
+
+### 1.0.3 update diagnostics revision
+
+Each native HTTP setup/request call records its step. Failures preserve the
+native return value; when a request ID exists, sceHttpsGetSslError captures
+additional TLS details before deletion. JSON/version, size and HTTP-status
+failures have separate stage labels. The Updates page renders these details,
+so it no longer depends solely on file logging.
+
+The app refreshes the log after update completion and on entering Log, selecting
+the last page. Kernel/app log-tail budgets now fit the combined display buffer.
+The automatic report includes the current result directly, even when app.log
+cannot be written. No update report is emitted for an offline skip.
+
+Removed the explicit zero DNS-retry override as an unnecessary potential source
+of INVALID_VALUE; the SDK default is used. Error 804311FE identifies invalid
+arguments but does not establish which call failed without the step. Console
+testing is needed to establish the original network error's cause.
+
+
+### Current 1.0.3 backend: bundled TLS
+
+Supersedes the native HTTP/SSL transport described above. update_network.c now
+uses libcurl linked against Mbed TLS. It retains native Net/NetCtl for Wi-Fi and
+sockets, but contains no SceHttp/SceSsl API calls. Certificate roots are loaded
+from app0:update-ca-bundle.pem, supplied in the VPK. Chain and hostname checks
+are mandatory, TLS minimum is 1.2, redirects stay disabled, response size remains
+bounded and libcurl timeouts apply. No HTTP or verification-disabled fallback
+exists. iTLS-Enso is not a runtime dependency.
+
+Run tools/install_update_deps.py with VITASDK set before building. Python 3.12+
+is required for its safe archive extraction. It verifies pinned official
+VitaSDK package archive SHA-256 hashes before installing into the SDK sysroot.
+The upstream master release URLs can change; a checksum mismatch stops the
+installer instead of silently substituting new libraries. Source/licenses and
+port recipe provenance are recorded in THIRD_PARTY_NOTICES.md.
+
+This adds a larger statically linked app binary and bundled trust data. The
+kernel storage plugins remain unchanged. Console networking verification is
+still required. Native build/import checks alone cannot prove on-device TLS.

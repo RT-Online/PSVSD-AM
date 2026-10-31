@@ -99,7 +99,10 @@ static void updates_view(const AmUi *m) {
     char info[128];
     snprintf(info,sizeof(info),"Installed: %s    Latest: %s",ACCESSORY_VERSION,u->version[0]?u->version:"Not checked");
     text(290,284,0,TEXT,info);
-    if (u->notes[0]) {
+    if (u->state==UPDATE_ERROR) {
+        char diagnostic[640];am_update_diagnostic(u,diagnostic,sizeof(diagnostic));
+        wrapped(290,312,diagnostic,600,6,0,TEXT);
+    } else if (u->notes[0]) {
         const char *s=u->notes;unsigned row=0;
         while (*s) {
             char line[256];s=wrap_line(s,line,sizeof(line),600,0);

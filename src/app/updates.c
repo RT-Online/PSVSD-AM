@@ -90,7 +90,10 @@ static int value(Json *j) {
     return 0;
 }
 static int version(const char *s,unsigned out[3]) {
-    if (*s=='v') ++s;
+    if (*s=='v') {
+        ++s;
+        if (*s=='.') ++s; /* Also accept tags such as v.1.0.3. */
+    }
     for (unsigned i=0;i<3;++i) {
         const char *start=s;unsigned n=0;
         if (*s<'0' || *s>'9') return -1;
@@ -152,14 +155,26 @@ void am_update_check_with_transport(AmUpdate *out,const char *current,const AmUp
         return; /* Offline is a silent skip, not a request to connect. */
     }
     char *body=malloc(AM_RELEASE_MAX_BYTES+1);size_t used=0;int status=0;
+    const char *stage=body?"HTTPS request":"Response buffer allocation";
     int ret=body?transport->get(transport->ctx,body,AM_RELEASE_MAX_BYTES,&used,&status):-1;
-    if (ret>=0 && status==200 && used<=AM_RELEASE_MAX_BYTES) ret=am_update_parse(body,used,current,out);
-    else if (ret>=0) ret=-1;
-    free(body);out->http_status=status;
+    if (ret>=0 && status==200 && used<=AM_RELEASE_MAX_BYTES) {
+        stage="Release JSON / version";ret=am_update_parse(body,used,current,out);
+        if (ret<0) snprintf(out->reason,sizeof(out->reason),"Release JSON or version tag is unsupported. Expected 1.2.3, v1.2.3 or v.1.2.3.");
+    }
+    else if (ret>=0) { stage=used>AM_RELEASE_MAX_BYTES?"Response size limit":"HTTP status";ret=-1; }
+    free(body);out->http_status=status;out->received=used;
     if (ret<0) {
         memset(out->version,0,sizeof(out->version));out->notes[0]=0;
         out->state=UPDATE_ERROR;out->error=ret;
+        snprintf(out->stage,sizeof(out->stage),"%s",stage);
         snprintf(out->message,sizeof(out->message),"%s",status==403 || status==429?"GitHub request blocked or rate-limited. Try later.":
             status==404?"No public release found.":"Could not check GitHub. See Log.");
     }
+}
+
+void am_update_diagnostic(const AmUpdate *result,char *text,size_t cap) {
+    snprintf(text,cap,"Step: %s\nError: %08X  HTTP: %d\n%s\nTLS: %08X  Flags: %08X\nTLS query: %08X  Bytes: %u",
+        result->stage[0]?result->stage:"Not reported",(unsigned)result->error,result->http_status,
+        result->reason,(unsigned)result->ssl_error,result->ssl_flags,
+        (unsigned)result->ssl_query,(unsigned)result->received);
 }

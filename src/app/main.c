@@ -53,7 +53,7 @@ static void refresh_log(void) {
     char part[8192];model.log[0]=0;
     snprintf(model.log,sizeof(model.log),"PSVSD/AM " ACCESSORY_VERSION "\n\n");
     const char *paths[]={ACCESSORY_KERNEL_LOG,AM_APP_LOG};
-    for (unsigned i=0;i<2;++i) if (am_read_log(paths[i],part,sizeof(part))>=0) {
+    for (unsigned i=0;i<2;++i) if (am_read_log(paths[i],part,i?sizeof(part):4096)>=0) {
         size_t used=strlen(model.log);snprintf(model.log+used,sizeof(model.log)-used,"%s\n%s\n",i?"APPLICATION":"KERNEL",part);
     }
     unsigned pages=am_ui_log_pages(model.log);if (model.log_page>=pages) model.log_page=pages-1;
@@ -137,6 +137,14 @@ static int update_worker(SceSize argc,void *args) {
     __atomic_store_n(&update_done,1,__ATOMIC_RELEASE);
     return 0;
 }
+static void update_report(void) {
+    if (model.update.state==UPDATE_OFFLINE) return;
+    char details[640];am_update_diagnostic(&model.update,details,sizeof(details));
+    am_log("Update check: state=%d latest=%s\n%s\n",model.update.state,model.update.version,details);
+    refresh_log();model.log_page=am_ui_log_pages(model.log)-1;
+    char exported[192];int result=am_export_report(details,exported,sizeof(exported));
+    if (result<0) snprintf(model.message,sizeof(model.message),"Report export failed (%08X); update details are shown above.",(unsigned)result);
+}
 static void check_updates(void) {
     uint64_t now=sceKernelGetProcessTimeWide();
     if (last_update_check && now-last_update_check<AM_UPDATE_INTERVAL_US) {
@@ -151,8 +159,9 @@ static void check_updates(void) {
     if (ret<0) {
         if (update_thread>=0) sceKernelDeleteThread(update_thread);
         update_thread=-1;model.busy=0;model.update.state=UPDATE_ERROR;
+        model.update.error=ret;snprintf(model.update.stage,sizeof(model.update.stage),"Create / start update worker");
         snprintf(model.update.message,sizeof(model.update.message),"Could not start update check.");
-        am_log("Update worker failed: %08X\n",(unsigned)ret);redraw=1;
+        am_log("Update worker failed: %08X\n",(unsigned)ret);update_report();redraw=1;
     }
 }
 static void finish_update_check(void) {
@@ -160,8 +169,7 @@ static void finish_update_check(void) {
     sceKernelWaitThreadEnd(update_thread,NULL,NULL);sceKernelDeleteThread(update_thread);update_thread=-1;
     model.update=update_result;model.busy=0;redraw=1;
     if (model.update.state!=UPDATE_OFFLINE) last_update_check=sceKernelGetProcessTimeWide();
-    am_log("Update check: state=%d HTTP=%d error=%08X latest=%s\n",model.update.state,
-           model.update.http_status,(unsigned)model.update.error,model.update.version);
+    update_report();
 }
 static int init_display(void) {
     SceUID block=sceKernelAllocMemBlock("PSVSDAMDisplay",SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW,4*1024*1024,NULL);
@@ -204,6 +212,7 @@ int main(void) {
         if (pressed&SCE_CTRL_SQUARE) keys|=AM_SQUARE;
         if (pressed&SCE_CTRL_TRIANGLE) keys|=AM_TRIANGLE;
         if (keys) redraw=1;
+        int previous_view=model.nav;
         int action=am_ui_input(&model,keys);
         if (keys) am_touch_block(&touch_state);
         else if (model.touch_available) {
@@ -220,6 +229,9 @@ int main(void) {
                 action=am_touch_sample(&touch_state,&model,contacts,id,x,y);
                 if (active!=touch_state.active || !contacts) redraw=redraw || active;
             }
+        }
+        if (model.nav==VIEW_LOG && previous_view!=VIEW_LOG) {
+            refresh_log();model.log_page=am_ui_log_pages(model.log)-1;
         }
         if (action!=ACTION_NONE) redraw=1;
         if (action==ACTION_CHECK_UPDATES) check_updates();

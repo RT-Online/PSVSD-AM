@@ -1,22 +1,29 @@
-/* Vita Wi-Fi gate and verified HTTPS transport. GPL-3.0-or-later. */
+/* Vita Wi-Fi gate and app-bundled libcurl/Mbed TLS transport. GPL-3.0-or-later. */
 #include "updates.h"
 #include "../common/paths.h"
 #include <psp2/net/net.h>
 #include <psp2/net/netctl.h>
-#include <psp2/net/http.h>
-#include <psp2/libssl.h>
+#include <curl/curl.h>
 #include <psp2/sysmodule.h>
 #include <psp2/kernel/processmgr.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
 typedef struct {
     void *net_memory;
-    int net_owned,ctl_owned,ssl_owned,http_owned;
+    int net_owned,ctl_owned;
     unsigned modules;
+    const char *stage;
+    int curl_error,failed;
+    long verify_result;
+    char reason[CURL_ERROR_SIZE];
+    char *body;
+    size_t cap,used;
+    int oversized;
 } Network;
-static const SceSysmoduleModuleId modules[]={SCE_SYSMODULE_NET,SCE_SYSMODULE_SSL,SCE_SYSMODULE_HTTP};
+static const SceSysmoduleModuleId modules[]={SCE_SYSMODULE_NET};
 static int load_module(Network *n,unsigned i) {
     if (sceSysmoduleIsLoaded(modules[i])==0) return 0;
     int ret=sceSysmoduleLoadModule(modules[i]);
@@ -43,60 +50,75 @@ static int wifi(void *context) {
     if (sceNetCtlInetGetInfo(SCE_NETCTL_INFO_GET_SSID,&info)<0 || !info.ssid[0]) return 0;
     return 1;
 }
+/* Enforce the response limit before copying any received bytes. */
+static size_t receive(void *data,size_t size,size_t count,void *context) {
+    Network *n=context;
+    if (size && count>SIZE_MAX/size) return 0;
+    size_t bytes=size*count;
+    if (bytes>n->cap-n->used) { n->oversized=1;return 0; }
+    memcpy(n->body+n->used,data,bytes);n->used+=bytes;
+    return bytes;
+}
 static int get(void *context,char *body,size_t cap,size_t *used,int *status) {
-    Network *n=context;int tmpl=0,conn=0,req=0,ret=-1;
-    unsigned long long started=sceKernelGetProcessTimeWide();
-    if (!wifi(n)) return -1; /* Connection may have changed since gating. */
-    if ((ret=load_module(n,1))<0 || (ret=load_module(n,2))<0) goto done;
-    ret=sceSslInit(256*1024);
-    if (ret>=0) n->ssl_owned=1;
-    else if (ret!=(int)SCE_SSL_ERROR_ALREADY_INITED) goto done;
-    ret=sceHttpInit(256*1024);if (ret<0) goto done;
-    n->http_owned=1;
-    ret=sceHttpsEnableOption(SCE_HTTPS_FLAG_SERVER_VERIFY|SCE_HTTPS_FLAG_CN_CHECK|
-        SCE_HTTPS_FLAG_NOT_AFTER_CHECK|SCE_HTTPS_FLAG_NOT_BEFORE_CHECK|SCE_HTTPS_FLAG_KNOWN_CA_CHECK);
-    if (ret<0) goto done;
-    tmpl=sceHttpCreateTemplate("PSVSD-AM/" ACCESSORY_VERSION,SCE_HTTP_VERSION_1_1,1);
-    if (tmpl<=0) { ret=tmpl<0?tmpl:-1;goto done; }
-    if ((ret=sceHttpSetResolveTimeOut(tmpl,3000000))<0 ||
-        (ret=sceHttpSetResolveRetry(tmpl,0))<0 ||
-        (ret=sceHttpSetConnectTimeOut(tmpl,5000000))<0 ||
-        (ret=sceHttpSetSendTimeOut(tmpl,5000000))<0 ||
-        (ret=sceHttpSetRecvTimeOut(tmpl,5000000))<0 ||
-        (ret=sceHttpSetAutoRedirect(tmpl,SCE_HTTP_DISABLE))<0) goto done;
-    conn=sceHttpCreateConnectionWithURL(tmpl,AM_RELEASE_API,0);
-    if (conn<=0) { ret=conn<0?conn:-1;goto done; }
-    req=sceHttpCreateRequestWithURL(conn,SCE_HTTP_METHOD_GET,AM_RELEASE_API,0);
-    if (req<=0) { ret=req<0?req:-1;goto done; }
-    if ((ret=sceHttpAddRequestHeader(req,"Accept","application/vnd.github+json",SCE_HTTP_HEADER_OVERWRITE))<0 ||
-        (ret=sceHttpAddRequestHeader(req,"X-GitHub-Api-Version","2026-03-10",SCE_HTTP_HEADER_OVERWRITE))<0 ||
-        (ret=sceHttpAddRequestHeader(req,"Accept-Encoding","identity",SCE_HTTP_HEADER_OVERWRITE))<0 ||
-        (ret=sceHttpSendRequest(req,NULL,0))<0 || (ret=sceHttpGetStatusCode(req,status))<0) goto done;
-    if (*status!=200) { ret=0;goto done; }
-    *used=0;
-    for (;;) {
-        if (sceKernelGetProcessTimeWide()-started>20000000ull) { ret=-1;break; }
-        char extra;size_t remaining=cap-*used;
-        unsigned amount=remaining>2048?2048:(unsigned)remaining;
-        ret=sceHttpReadData(req,remaining?body+*used:&extra,remaining?amount:1);
-        if (ret<=0) break;
-        if (!remaining || (unsigned)ret>amount) { ret=-1;break; }
-        *used+=(size_t)ret;
+    Network *n=context;CURL *handle=NULL;struct curl_slist *headers=NULL;
+    CURLcode code;int initialized=0,ret=-1;long http_status=0;
+    n->stage="Wi-Fi recheck";n->failed=1;
+    if (!wifi(n)) return -1;
+    n->stage="Initialize bundled TLS";
+    code=curl_global_init(CURL_GLOBAL_DEFAULT);if (code!=CURLE_OK) goto done;
+    initialized=1;handle=curl_easy_init();
+    if (!handle) { code=CURLE_OUT_OF_MEMORY;goto done; }
+    const char *values[]={"Accept: application/vnd.github+json","X-GitHub-Api-Version: 2026-03-10","Accept-Encoding: identity"};
+    for (unsigned i=0;i<3;++i) {
+        struct curl_slist *next=curl_slist_append(headers,values[i]);
+        if (!next) { code=CURLE_OUT_OF_MEMORY;goto done; }
+        headers=next;
     }
-    if (ret>=0) body[*used]=0;
+    n->body=body;n->cap=cap;n->used=0;
+#define OPTION(label,option,value) do { n->stage=label;code=curl_easy_setopt(handle,option,value);if (code!=CURLE_OK) goto done; } while (0)
+    OPTION("Set GitHub endpoint",CURLOPT_URL,AM_RELEASE_API);
+    OPTION("Restrict protocol",CURLOPT_PROTOCOLS_STR,"https");
+    OPTION("Disable redirects",CURLOPT_FOLLOWLOCATION,0L);
+    OPTION("Set User-Agent",CURLOPT_USERAGENT,"PSVSD-AM/" ACCESSORY_VERSION);
+    OPTION("Set request headers",CURLOPT_HTTPHEADER,headers);
+    OPTION("Set request timeout",CURLOPT_TIMEOUT,20L);
+    OPTION("Set connect timeout",CURLOPT_CONNECTTIMEOUT,8L);
+    OPTION("Disable signals",CURLOPT_NOSIGNAL,1L);
+    OPTION("Set HTTP version",CURLOPT_HTTP_VERSION,(long)CURL_HTTP_VERSION_1_1);
+    OPTION("Require TLS 1.2 or newer",CURLOPT_SSLVERSION,(long)CURL_SSLVERSION_TLSv1_2);
+    OPTION("Set bundled trust roots",CURLOPT_CAINFO,"app0:update-ca-bundle.pem");
+    OPTION("Verify server certificate",CURLOPT_SSL_VERIFYPEER,1L);
+    OPTION("Verify server hostname",CURLOPT_SSL_VERIFYHOST,2L);
+    OPTION("Set error buffer",CURLOPT_ERRORBUFFER,n->reason);
+    OPTION("Set response callback",CURLOPT_WRITEFUNCTION,receive);
+    OPTION("Set response context",CURLOPT_WRITEDATA,n);
+#undef OPTION
+    n->stage="Bundled TLS HTTPS request";
+    code=curl_easy_perform(handle);
+    curl_easy_getinfo(handle,CURLINFO_RESPONSE_CODE,&http_status);
+    curl_easy_getinfo(handle,CURLINFO_SSL_VERIFYRESULT,&n->verify_result);
+    *status=(int)http_status;*used=n->used;
+    if (n->oversized) n->stage="Response size limit";
+    if (code==CURLE_OK) { body[n->used]=0;ret=0; }
 done:
-    if (req>0) sceHttpDeleteRequest(req);
-    if (conn>0) sceHttpDeleteConnection(conn);
-    if (tmpl>0) sceHttpDeleteTemplate(tmpl);
-    return ret;
+    n->curl_error=(int)code;n->failed=ret<0;
+    if (code!=CURLE_OK && !n->reason[0]) snprintf(n->reason,sizeof(n->reason),"%s",curl_easy_strerror(code));
+    if (handle) curl_easy_cleanup(handle);
+    curl_slist_free_all(headers);
+    if (initialized) curl_global_cleanup();
+    return ret<0?(code==CURLE_OK?-1:-(int)code):0;
 }
 void am_update_check(AmUpdate *out) {
     Network network={0};AmUpdateTransport transport={&network,wifi,get};
     am_update_check_with_transport(out,ACCESSORY_VERSION,&transport);
-    if (network.http_owned) sceHttpTerm();
-    if (network.ssl_owned) sceSslTerm();
+    if (out->state==UPDATE_ERROR && network.failed) {
+        if (network.stage) snprintf(out->stage,sizeof(out->stage),"%s",network.stage);
+        out->error=network.curl_error?network.curl_error:out->error;
+        out->ssl_error=(int)network.verify_result;out->ssl_flags=(unsigned)network.verify_result;
+        snprintf(out->reason,sizeof(out->reason),"%.191s",network.reason);
+    }
     if (network.ctl_owned) sceNetCtlTerm();
     if (network.net_owned) sceNetTerm();
     free(network.net_memory);
-    for (unsigned n=3;n>0;--n) if (network.modules&(1u<<(n-1))) sceSysmoduleUnloadModule(modules[n-1]);
+    if (network.modules&1u) sceSysmoduleUnloadModule(SCE_SYSMODULE_NET);
 }

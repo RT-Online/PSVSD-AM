@@ -6,7 +6,7 @@ if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     message(FATAL_ERROR "Set VITASDK to your VitaSDK installation")
   endif()
 endif()
-project(psvsd_am VERSION 1.0.3 LANGUAGES C)
+project(psvsd_am VERSION 1.1.0 LANGUAGES C)
 include("${VITASDK}/share/vita.cmake" REQUIRED)
 set(CMAKE_C_STANDARD 99)
 
@@ -45,13 +45,20 @@ endforeach()
 add_executable(psvsd_am_app app/main.c app/session.c app/manager.c app/prepare.c app/ui.c app/controller.c app/touch.c app/updates.c app/update_network.c common/settings.c)
 target_compile_options(psvsd_am_app PRIVATE -Wall -Wextra -Werror -O2 -fno-builtin-printf)
 target_link_libraries(psvsd_am_app SceDisplay_stub SceCtrl_stub SceProcessmgr_stub
-  SceIofilemgr_stub SceLibKernel_stub SceVshBridge_stub ScePower_stub SceTouch_stub SceNet_stub SceNetCtl_stub SceHttp_stub SceSsl_stub SceSysmodule_stub taihen_stub)
+  SceIofilemgr_stub SceLibKernel_stub SceVshBridge_stub ScePower_stub SceTouch_stub SceNet_stub SceNetCtl_stub SceSysmodule_stub taihen_stub
+  -Wl,--start-group curl mbedtls mbedx509 mbedcrypto everest p256m z zstd pthread -Wl,--end-group)
 clean_vita_self(psvsd_am_app.self psvsd_am_app UNSAFE)
 vita_create_vpk(PSVSD_AM.vpk RTPSV0001 psvsd_am_app.self
-  VERSION 01.03 NAME "PSVSD/AM"
+  VERSION 01.10 NAME "PSVSD/AM"
   FILE "${CMAKE_CURRENT_BINARY_DIR}/usbmc_accessory_probe.skprx" usbmc_accessory_probe.skprx
   FILE "${CMAKE_CURRENT_BINARY_DIR}/psvsd_am.skprx" psvsd_am.skprx
   FILE "${CMAKE_CURRENT_BINARY_DIR}/psvsd_am_status.skprx" psvsd_am_status.skprx
+  FILE "${CMAKE_CURRENT_SOURCE_DIR}/../assets/update-ca-bundle.pem" update-ca-bundle.pem
+  FILE "${CMAKE_CURRENT_SOURCE_DIR}/../docs/licenses/curl.txt" licenses/curl.txt
+  FILE "${CMAKE_CURRENT_SOURCE_DIR}/../docs/licenses/mbedtls.txt" licenses/mbedtls.txt
+  FILE "${CMAKE_CURRENT_SOURCE_DIR}/../docs/licenses/zlib.txt" licenses/zlib.txt
+  FILE "${CMAKE_CURRENT_SOURCE_DIR}/../docs/licenses/zstd.txt" licenses/zstd.txt
+  FILE "${CMAKE_CURRENT_SOURCE_DIR}/../docs/licenses/ca-bundle-MPL-2.0.txt" licenses/ca-bundle-MPL-2.0.txt
   FILE "${CMAKE_CURRENT_SOURCE_DIR}/../assets/icon0.png" sce_sys/icon0.png
   FILE "${CMAKE_CURRENT_SOURCE_DIR}/../assets/bg.png" sce_sys/livearea/contents/bg.png
   FILE "${CMAKE_CURRENT_SOURCE_DIR}/../assets/startup.png" sce_sys/livearea/contents/startup.png

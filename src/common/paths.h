@@ -1,7 +1,7 @@
 #ifndef ACCESSORY_PATHS_H
 #define ACCESSORY_PATHS_H
 #include <stdint.h>
-#define ACCESSORY_VERSION "1.0.3"
+#define ACCESSORY_VERSION "1.1.0"
 #define ACCESSORY_DATA_DIR "ux0:data/PSVSD_Accessory"
 #define ACCESSORY_USER_LOG ACCESSORY_DATA_DIR "/test.log"
 #define ACCESSORY_STAGED_PROBE ACCESSORY_DATA_DIR "/usbmc_accessory_probe.skprx"

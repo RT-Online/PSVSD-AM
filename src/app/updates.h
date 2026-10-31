@@ -9,7 +9,10 @@
 enum { UPDATE_UNCHECKED, UPDATE_CHECKING, UPDATE_OFFLINE, UPDATE_CURRENT,
        UPDATE_AVAILABLE, UPDATE_AHEAD, UPDATE_ERROR };
 typedef struct {
-    int state,error,http_status;
+    int state,error,http_status,ssl_error,ssl_query;
+    unsigned ssl_flags;
+    size_t received;
+    char stage[48],reason[192];
     char version[32],notes[4096],message[160];
 } AmUpdate;
 /* The transport is injectable so offline gating and response failures can be
@@ -22,4 +25,5 @@ typedef struct {
 int am_update_parse(const char *json,size_t size,const char *current,AmUpdate *out);
 void am_update_check_with_transport(AmUpdate *out,const char *current,const AmUpdateTransport *transport);
 void am_update_check(AmUpdate *out);
+void am_update_diagnostic(const AmUpdate *result,char *text,size_t cap);
 #endif

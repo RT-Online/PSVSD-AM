@@ -4,7 +4,7 @@
 
 AI tools assisted with code development, documentation, and testing. RefurbedTech directed development and performed hardware testing.
 
-Version **1.0.3** · Vita title ID **RTPSV0001** · Package version **01.03**
+Version **1.1.0** · Vita title ID **RTPSV0001** · Package version **01.10**
 
 ## Features
 
@@ -66,7 +66,7 @@ The three kernel payloads are intentional: `psvsd_am.skprx` is the boot plugin, 
 
 ## Validation and license
 
-Host checks: `sh tests/run_tests.sh`. These exercise control flow with mocked Vita APIs; they cannot prove hardware behavior, private firmware offsets or power-loss recovery. Original hardware reports confirmed secondary file transfers/standby recovery and primary mounting. Version 1.0.3 has passed the host suite, a native VitaSDK build and static import checks; console testing is pending.
+Host checks: `sh tests/run_tests.sh`. These exercise control flow with mocked Vita APIs; they cannot prove hardware behavior, private firmware offsets or power-loss recovery. Original hardware reports confirmed secondary file transfers/standby recovery and primary mounting. Version 1.1.0 has passed the host suite, a native VitaSDK build and static import checks; console testing is pending.
 
 GPL-3.0-or-later; see [COPYING](COPYING) and [third-party notices](docs/THIRD_PARTY_NOTICES.md). Derived from USBMC by Yifan Lu and VitaShell storage code by TheFloW. Font and taiHEN SDK components retain their own licenses.
 
@@ -77,8 +77,7 @@ Open **Updates → Check for Updates**. The app first checks for a connected Wi-
 network. When offline it silently skips the request without prompting for a connection. It does not enable Wi-Fi or start a connection for you.
 
 When connected, it checks the latest stable public release of
-https://github.com/RT-Online/PSVSD-AM and compares numeric `vMAJOR.MINOR.PATCH`
-tags. It distinguishes an available update, the current public version, and an
+https://github.com/RT-Online/PSVSD-AM and compares numeric `MAJOR.MINOR.PATCH` tags, optionally prefixed by `v` or `v.`. It distinguishes an available update, the current public version, and an
 installed build newer than the public release. Release notes are displayed as
 bounded plain text with Prev/Next controls. Use Cross or tap the Check button;
 Left/Right or swipes browse notes.
@@ -96,3 +95,20 @@ Switching away from USB ux0 currently does not automatically verify or update
 PSVSD/AM and VitaShell on the storage that will become ux0. Keep those recovery
 tools installed and updated on that storage before changing the boot target.
 The new update checker does not resolve this separate preparation gap.
+
+
+Update-check failures now show the failed step, hexadecimal error, HTTP status
+and available TLS details directly on the Updates page. The Log refreshes after
+a check and when opened, and shows the latest page. A current diagnostic report
+is automatically exported to `ux0:data/PSVSD_Accessory/test.log`; export failures
+are reported on screen. Offline skips remain silent.
+
+
+### Bundled TLS — no iTLS-Enso requirement
+
+The current 1.1.0 build includes libcurl, Mbed TLS and a Mozilla CA bundle inside
+the VPK. Update checks no longer use the Vita's system HTTPS implementation.
+Users do not need to install iTLS-Enso or modify system certificates. TLS 1.2 or
+newer, certificate-chain validation and hostname verification remain required.
+The network feature still needs testing on the Vita; it does not change storage
+settings. If it fails, the Updates page includes a readable libcurl error reason.

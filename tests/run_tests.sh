@@ -26,11 +26,11 @@ for suite in managed status; do
 done
 cc -std=c99 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
   -I"$test_dir" "$test_dir/test_ui.c" "$test_dir/../src/app/ui.c" \
-  "$test_dir/../src/app/controller.c" "$test_dir/../src/common/settings.c" -o "$test_out/test_ui"
+  "$test_dir/../src/app/controller.c" "$test_dir/../src/app/updates.c" "$test_dir/../src/common/settings.c" -o "$test_out/test_ui"
 ASAN_OPTIONS=detect_leaks=0 "$test_out/test_ui" ${PSVSD_AM_PREVIEW_DIR:+"$PSVSD_AM_PREVIEW_DIR"}
 cc -std=c99 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
   -I"$test_dir" "$test_dir/test_touch.c" "$test_dir/../src/app/touch.c" \
-  "$test_dir/../src/app/ui.c" "$test_dir/../src/app/controller.c" \
+  "$test_dir/../src/app/ui.c" "$test_dir/../src/app/controller.c" "$test_dir/../src/app/updates.c" \
   "$test_dir/../src/common/settings.c" -o "$test_out/test_touch"
 ASAN_OPTIONS=detect_leaks=0 "$test_out/test_touch"
 cc -std=c99 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
