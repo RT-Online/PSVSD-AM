@@ -74,8 +74,7 @@ GPL-3.0-or-later; see [COPYING](COPYING) and [third-party notices](docs/THIRD_PA
 ## Check for updates
 
 Open **Updates → Check for Updates**. The app first checks for a connected Wi-Fi
-network. When offline it displays **Connect to Wi-Fi to check for updates** and
-makes no HTTP request. It does not enable Wi-Fi or start a connection for you.
+network. When offline it silently skips the request without prompting for a connection. It does not enable Wi-Fi or start a connection for you.
 
 When connected, it checks the latest stable public release of
 https://github.com/RT-Online/PSVSD-AM and compares numeric `vMAJOR.MINOR.PATCH`

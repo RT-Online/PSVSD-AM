@@ -92,7 +92,8 @@ static void updates_view(const AmUi *m) {
     button(AM_UPDATE_X,AM_UPDATE_Y,AM_UPDATE_W,AM_UPDATE_H,"Check for Updates",!m->busy);
     round_rect(270,205,640,257,12,CARD);
     const AmUpdate *u=&m->update;
-    const char *state=u->state==UPDATE_UNCHECKED?"Check when connected to Wi-Fi.":
+    const char *state=u->state==UPDATE_UNCHECKED?"Check for a newer public release.":
+        u->state==UPDATE_OFFLINE?"Updates not checked.":
         u->state==UPDATE_CHECKING?"Checking Wi-Fi and GitHub...":u->message;
     wrapped(290,220,state,600,2,1,u->state==UPDATE_ERROR?BAD:ACCENT);
     char info[128];
@@ -108,7 +109,7 @@ static void updates_view(const AmUi *m) {
         snprintf(info,sizeof(info),"Release notes: page %u of %u",m->update_page+1,am_ui_update_pages(u->notes));
         text(290,441,0,MUTED,info);
     } else {
-        wrapped(290,326,"Manual check only. Connect Wi-Fi in system settings.\nThis checks versions; it does not install updates.",600,3,0,MUTED);
+        wrapped(290,326,"Manual check only.\nThis checks versions; it does not install updates.",600,3,0,MUTED);
     }
 }
 static void overview(const AmUi *m) {

@@ -75,7 +75,7 @@ int main(int argc,char **argv) {
     for (unsigned i=0;i<16;++i) assert(buffer.before[i]==0xDEADBEEF && buffer.after[i]==0xDEADBEEF);
     am_ui_navigate(&m,VIEW_UPDATES);m.busy=0;m.copy_active=0;
     assert(am_ui_input(&m,AM_CROSS)==ACTION_CHECK_UPDATES);
-    m.update.state=UPDATE_OFFLINE;strcpy(m.update.message,"Connect to Wi-Fi to check for updates.");
+    m.update.state=UPDATE_OFFLINE;m.update.message[0]=0;
     am_ui_render(buffer.pixels,&m);if (argc>1) dump(argv[1],"UpdatesOffline");
     m.update.state=UPDATE_AVAILABLE;strcpy(m.update.version,"v1.0.4");
     strcpy(m.update.message,"A newer release is available.");

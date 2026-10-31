@@ -152,3 +152,13 @@ to exercise version/error parsing; native networking remains a console test.
 
 New imports are SceNet, SceNetCtl, SceHttp, SceSsl and SceSysmodule. Existing
 kernel mounting/copy behavior is unchanged apart from release metadata.
+
+
+### 1.0.3 minor offline behavior update
+
+The release number and APP_VER remain 1.0.3 / 01.03. Offline update checks now
+return silently with an empty message and zero HTTP requests. The Updates page
+shows neutral status only; connection instructions were removed. Startup remains
+on Overview, with no automatic update check or Wi-Fi connection dialog invoked
+by the app. Native build, import/package checks and host regressions were rerun.
+Console confirmation remains pending.

@@ -48,9 +48,9 @@ int main(int argc,char **argv) {
     AmUpdateTransport transport={NULL,wifi,get};
     memset(&mock,0,sizeof(mock));mock.status=200;mock.json=release;
     am_update_check_with_transport(&out,"1.0.3",&transport);
-    assert(out.state==UPDATE_OFFLINE && !mock.calls && !out.error && !out.version[0]);++cases;
+    assert(out.state==UPDATE_OFFLINE && !mock.calls && !out.error && !out.version[0] && !out.message[0]);++cases;
     mock.connected=-1;am_update_check_with_transport(&out,"1.0.3",&transport);
-    assert(out.state==UPDATE_OFFLINE && !mock.calls);++cases;
+    assert(out.state==UPDATE_OFFLINE && !mock.calls && !out.message[0]);++cases;
     mock.connected=1;am_update_check_with_transport(&out,"1.0.3",&transport);
     assert(out.state==UPDATE_AHEAD && mock.calls==1);++cases;
     mock.fail=1;am_update_check_with_transport(&out,"1.0.3",&transport);

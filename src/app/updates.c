@@ -149,7 +149,7 @@ void am_update_check_with_transport(AmUpdate *out,const char *current,const AmUp
     memset(out,0,sizeof(*out));
     if (transport->wifi(transport->ctx)<=0) {
         out->state=UPDATE_OFFLINE;
-        snprintf(out->message,sizeof(out->message),"Connect to Wi-Fi to check for updates.");return;
+        return; /* Offline is a silent skip, not a request to connect. */
     }
     char *body=malloc(AM_RELEASE_MAX_BYTES+1);size_t used=0;int status=0;
     int ret=body?transport->get(transport->ctx,body,AM_RELEASE_MAX_BYTES,&used,&status):-1;
