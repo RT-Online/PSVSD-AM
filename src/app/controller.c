@@ -2,7 +2,7 @@
 void am_ui_navigate(AmUi *m,int view) {
     if (view<0 || view>=AM_NAV_COUNT) return;
     if (m->nav<VIEW_REBOOT) m->return_nav=m->nav;
-    m->nav=view;m->editing=0;m->field=0;m->clear_confirm=0;m->message[0]=0;
+    m->nav=view;m->editing=0;m->field=0;m->clear_confirm=0;m->update_confirm=0;m->message[0]=0;
 }
 static void back(AmUi *m) {
     if (m->nav==VIEW_REBOOT || m->nav==VIEW_EXIT) {
@@ -12,6 +12,12 @@ static void back(AmUi *m) {
 }
 int am_ui_input(AmUi *m,unsigned keys) {
     if (m->busy) return ACTION_NONE;
+    if (m->update_confirm) {
+        if (keys&AM_CIRCLE) { m->update_confirm=0;return ACTION_NONE; }
+        if (keys&(AM_LEFT|AM_RIGHT|AM_UP|AM_DOWN)) { m->update_choice^=1;return ACTION_NONE; }
+        if (keys&AM_CROSS) { m->update_confirm=0;return m->update_choice==0?ACTION_INSTALL_UPDATE:ACTION_NONE; }
+        return ACTION_NONE;
+    }
     if (m->clear_confirm) {
         if (keys&AM_CIRCLE) { m->clear_confirm=0;return ACTION_NONE; }
         if (keys&(AM_LEFT|AM_RIGHT|AM_UP|AM_DOWN)) { m->clear_choice^=1;return ACTION_NONE; }
@@ -57,7 +63,9 @@ int am_ui_input(AmUi *m,unsigned keys) {
     switch (m->nav) {
         case VIEW_SETTINGS:case VIEW_REBOOT:case VIEW_EXIT:m->editing=1;m->field=0;break;
         case VIEW_TEST:return ACTION_TEST;
-        case VIEW_UPDATES:return ACTION_CHECK_UPDATES;
+        case VIEW_UPDATES:
+            if (m->update.state==UPDATE_AVAILABLE && m->update.asset_url[0]) { m->update_confirm=1;m->update_choice=1;return ACTION_NONE; }
+            return ACTION_CHECK_UPDATES;
         case VIEW_LOG:return ACTION_LOG;
     }
     return ACTION_NONE;

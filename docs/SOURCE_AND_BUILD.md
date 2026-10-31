@@ -1,3 +1,15 @@
+# 1.1.0 optional in-app update revision
+
+Current behavior supersedes the older check-only descriptions below: one silent
+background launch check; explicit download/install confirmation; separate
+RTPSVUPD1 installer app; digest/ZIP/SFO validation; no automatic installation.
+README describes installation, supported APP_VER mapping and known limitations.
+New sources: update_install.c/.h, package.c, package_metadata.c, installer_main.c;
+vendor/minizip holds upstream zlib 1.3.1 minizip readers with original notices.
+tools/make_package_heads.py regenerates fixed-title headers from the VitaShell
+GPL template tools/head-template.bin. The native build also builds the helper
+SELF/SFO and embeds them in the main VPK. Source version remains 1.1.0.
+
 # Current release: 1.1.0
 
 App semantic version: 1.1.0. Vita package APP_VER: 01.10. Kernel module metadata:

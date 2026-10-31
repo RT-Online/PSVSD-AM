@@ -73,21 +73,42 @@ GPL-3.0-or-later; see [COPYING](COPYING) and [third-party notices](docs/THIRD_PA
 
 ## Check for updates
 
-Open **Updates → Check for Updates**. The app first checks for a connected Wi-Fi
-network. When offline it silently skips the request without prompting for a connection. It does not enable Wi-Fi or start a connection for you.
+The app quietly checks the latest stable GitHub release once at launch when
+Wi-Fi is already connected. It does not block menu navigation, enable Wi-Fi,
+prompt for a connection or force an update. Offline/error results do not open a
+dialog. A newer release is noted on Overview and on the Updates page.
 
-When connected, it checks the latest stable public release of
-https://github.com/RT-Online/PSVSD-AM and compares numeric `MAJOR.MINOR.PATCH` tags, optionally prefixed by `v` or `v.`. It distinguishes an available update, the current public version, and an
-installed build newer than the public release. Release notes are displayed as
-bounded plain text with Prev/Next controls. Use Cross or tap the Check button;
-Left/Right or swipes browse notes.
+Open **Updates** to read release notes. Select **Update to [version]** and confirm
+**Install Update** to download and install; Cancel is selected initially. Pending
+mount edits must be saved or discarded first. A manual **Check for Updates**
+button remains when no installable newer version is available. Checks are limited
+to one GitHub attempt per minute; Left/Right or swipes browse notes.
 
-Checks are manual, run on a worker thread, and are limited to one GitHub attempt
-per minute. There is no startup polling, download, installation, login, token,
-telemetry or storage-setting change. A disconnected network, HTTPS failure,
-missing release, invalid response or rate limit does not change your saved
-mount settings. TLS verification remains enabled; network/TLS operation needs
-console testing. An API check cannot prove that a release is hardware-safe.
+Only a named `PSVSD_AM_*.vpk` asset from this repository with a GitHub-provided
+SHA-256 digest is installable. The app downloads over verified HTTPS, checks the
+digest, extracts into its own staging directory, checks ZIP CRCs and validates
+TITLE_ID, CONTENT_ID and APP_VER before handing off to a separate installer.
+The helper closes PSVSD/AM, installs the staged package and reopens PSVSD/AM.
+Its temporary bubble is removed on return when system promotion allows it.
+Failures leave diagnostics in the app's update data; pre-install validation
+failures do not touch the live app. Keep power available during installation.
+
+The updater preserves mount settings and does not change other app folders.
+It updates the app on the currently mounted ux0 only. If a release changes the
+boot plugin, use Save and Reboot afterward to refresh the managed boot plugin.
+The separate main-storage preparation limitation below still applies. Release
+checks compare numeric versions, optionally prefixed by `v` or `v.`. Supported
+Vita APP_VER mapping is MAJOR.(MINOR*10+PATCH), with minor/patch each 0–9.
+
+To receive this feature, install this revised 1.1.0 VPK manually once. Previous
+check-only builds cannot install it automatically. Subsequent higher-version
+releases can use the optional in-app flow. Publishing a new asset under the same
+version does not trigger an update offer on an already matching version.
+
+The default/arbitrary system-date compatibility change is still pending. TLS
+certificate and hostname verification remain enabled. Installer handoff and
+installation still require console testing; host checks cannot prove hardware
+or power-loss behavior. There is no login, token or telemetry.
 
 ### Returning to other main storage
 
@@ -99,7 +120,7 @@ The new update checker does not resolve this separate preparation gap.
 
 Update-check failures now show the failed step, hexadecimal error, HTTP status
 and available TLS details directly on the Updates page. The Log refreshes after
-a check and when opened, and shows the latest page. A current diagnostic report
+a check and when opened, and shows the latest page. After a manual check, a current diagnostic report
 is automatically exported to `ux0:data/PSVSD_Accessory/test.log`; export failures
 are reported on screen. Offline skips remain silent.
 

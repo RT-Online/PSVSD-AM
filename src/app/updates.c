@@ -1,5 +1,5 @@
 /* Bounded release JSON decoding and numeric version comparison.
- * No storage/configuration changes or executable downloads. GPL-3.0-or-later. */
+ * Release metadata and optional asset selection. GPL-3.0-or-later. */
 #include "updates.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -108,6 +108,45 @@ static int version(const char *s,unsigned out[3]) {
     }
     return *s?-1:0;
 }
+static int assets(Json *j,AmUpdate *out) {
+    if (take(j,'[')<0) return -1;
+    space(j);if (j->p<j->end && *j->p==']') { ++j->p;return 0; }
+    for (unsigned count=0;count<128;++count) {
+        char name[128]={0},url[512]={0},digest[80]={0};unsigned seen=0;
+        if (take(j,'{')<0) return -1;
+        for (;;) {
+            char key[64];int cut=0;space(j);
+            if (j->p<j->end && *j->p=='}') { ++j->p;break; }
+            if (string(j,key,sizeof(key),&cut)<0 || take(j,':')<0) return -1;
+            unsigned f=!cut && !strcmp(key,"name")?1:!cut && !strcmp(key,"browser_download_url")?2:!cut && !strcmp(key,"digest")?4:0;
+            if (f && (seen&f)) return -1;
+            seen|=f;int truncated=0;
+            if (f) {
+                space(j);
+                if (f==4 && j->p<j->end && *j->p=='n') { if (literal(j,"null")<0) return -1; }
+                else if (string(j,f==1?name:f==2?url:digest,f==1?sizeof(name):f==2?sizeof(url):sizeof(digest),&truncated)<0 || truncated) return -1;
+            } else if (value(j)<0) return -1;
+            space(j);if (j->p<j->end && *j->p=='}') { ++j->p;break; }
+            if (take(j,',')<0) return -1;
+            space(j);if (j->p<j->end && *j->p=='}') return -1;
+        }
+        size_t len=strlen(name);
+        if (len>13 && !strncmp(name,"PSVSD_AM_",9) && !strcmp(name+len-4,".vpk")) {
+            const char *prefix="https://github.com/RT-Online/PSVSD-AM/releases/download/";
+            int valid=!strncmp(url,prefix,strlen(prefix)) && !strncmp(digest,"sha256:",7) && strlen(digest)==71;
+            for (unsigned i=7;valid && i<71;++i) valid=(digest[i]>='0' && digest[i]<='9') || (digest[i]>='a' && digest[i]<='f');
+            if (valid) {
+                if (out->asset_url[0]) return -1; /* Ambiguous packages are not installable. */
+                snprintf(out->asset_url,sizeof(out->asset_url),"%s",url);
+                memcpy(out->sha256,digest+7,65);
+            }
+        }
+        space(j);if (j->p<j->end && *j->p==']') { ++j->p;return 0; }
+        if (take(j,',')<0) return -1;
+    }
+    return -1;
+}
+
 int am_update_parse(const char *json,size_t size,const char *current,AmUpdate *out) {
     if (!json || !current || !out || size>AM_RELEASE_MAX_BYTES) return -1;
     AmUpdate result={0};Json j={json,json+size,0};unsigned seen=0;
@@ -118,7 +157,7 @@ int am_update_parse(const char *json,size_t size,const char *current,AmUpdate *o
         if (string(&j,key,sizeof(key),&cut)<0 || take(&j,':')<0) return -1;
         unsigned field=!cut && !strcmp(key,"tag_name")?1:
             !cut && !strcmp(key,"body")?4:
-            !cut && !strcmp(key,"draft")?8:!cut && !strcmp(key,"prerelease")?16:0;
+            !cut && !strcmp(key,"draft")?8:!cut && !strcmp(key,"prerelease")?16:!cut && !strcmp(key,"assets")?32:0;
         if (field && (seen&field)) return -1;
         seen|=field;
         if (field==1) {
@@ -128,6 +167,8 @@ int am_update_parse(const char *json,size_t size,const char *current,AmUpdate *o
             space(&j);
             if (j.p<j.end && *j.p=='n') { if (literal(&j,"null")<0) return -1; }
             else if (string(&j,result.notes,sizeof(result.notes),NULL)<0) return -1;
+        } else if (field==32) {
+            if (assets(&j,&result)<0) return -1;
         } else if (field==8 || field==16) {
             if (literal(&j,"false")<0) return -1; /* Stable published releases only. */
         } else if (value(&j)<0) return -1;

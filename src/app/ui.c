@@ -89,7 +89,9 @@ unsigned am_ui_update_pages(const char *s) {
 }
 static void updates_view(const AmUi *m) {
     title("Updates","Official releases from RT-Online/PSVSD-AM");
-    button(AM_UPDATE_X,AM_UPDATE_Y,AM_UPDATE_W,AM_UPDATE_H,"Check for Updates",!m->busy);
+    char action[64];snprintf(action,sizeof(action),"Update to %s",m->update.version);
+    button(AM_UPDATE_X,AM_UPDATE_Y,AM_UPDATE_W,AM_UPDATE_H,
+        m->update.state==UPDATE_AVAILABLE && m->update.asset_url[0]?action:"Check for Updates",!m->busy && m->update.state!=UPDATE_CHECKING);
     round_rect(270,205,640,257,12,CARD);
     const AmUpdate *u=&m->update;
     const char *state=u->state==UPDATE_UNCHECKED?"Check for a newer public release.":
@@ -112,7 +114,7 @@ static void updates_view(const AmUi *m) {
         snprintf(info,sizeof(info),"Release notes: page %u of %u",m->update_page+1,am_ui_update_pages(u->notes));
         text(290,441,0,MUTED,info);
     } else {
-        wrapped(290,326,"Manual check only.\nThis checks versions; it does not install updates.",600,3,0,MUTED);
+        wrapped(290,326,"Checks quietly at launch when Wi-Fi is connected.\nInstallation is optional and requires confirmation.",600,3,0,MUTED);
     }
 }
 static void overview(const AmUi *m) {
@@ -252,6 +254,19 @@ void am_ui_render(uint32_t *pixels,const AmUi *m) {
         wrapped(284,444,m->message,614,1,0,TEXT);
     }
     if (m->clear_confirm) clear_log_confirmation(m);
+    if (m->update_confirm) {
+        round_rect(258,154,666,300,18,BORDER);round_rect(260,156,662,296,16,PANEL);
+        text(284,177,2,TEXT,"Install update?");
+        char b[160];snprintf(b,sizeof(b),"Download and install %s? The app will close and reopen.",m->update.version);
+        wrapped(284,238,b,604,3,1,TEXT);
+        text(284,320,0,MUTED,"Saved mount settings are retained. No update is forced.");
+        const char *labels[]={"Install Update","Cancel"};
+        for (int i=0;i<2;++i) {
+            int x=i?AM_CANCEL_X:AM_CONFIRM_X;
+            round_rect(x,AM_CONFIRM_Y,AM_CONFIRM_W,AM_CONFIRM_H,12,m->update_choice==i?COLOR(23,61,74):CARD);
+            text(x+(AM_CONFIRM_W-width(labels[i],1))/2,AM_CONFIRM_Y+17,1,m->update_choice==i?ACCENT:MUTED,labels[i]);
+        }
+    }
     rect(26,AM_FOOTER_Y,908,1,BORDER);
     text(32,501,0,MUTED,m->nav==VIEW_LOG?"Triangle: clear log":m->touch_available?"Touch + D-pad":"D-pad / X / O");
     if (m->nav==VIEW_UPDATES) {

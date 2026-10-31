@@ -1,4 +1,4 @@
-/* On-demand public release checks. GPL-3.0-or-later. */
+/* Public release checks and explicit downloads. GPL-3.0-or-later. */
 #ifndef PSVSD_AM_UPDATES_H
 #define PSVSD_AM_UPDATES_H
 #include <stddef.h>
@@ -7,12 +7,13 @@
 #define AM_RELEASE_MAX_BYTES 65536u
 #define AM_UPDATE_INTERVAL_US 60000000u
 enum { UPDATE_UNCHECKED, UPDATE_CHECKING, UPDATE_OFFLINE, UPDATE_CURRENT,
-       UPDATE_AVAILABLE, UPDATE_AHEAD, UPDATE_ERROR };
+       UPDATE_AVAILABLE, UPDATE_AHEAD, UPDATE_ERROR, UPDATE_INSTALLING, UPDATE_INSTALLED };
 typedef struct {
     int state,error,http_status,ssl_error,ssl_query;
     unsigned ssl_flags;
     size_t received;
     char stage[48],reason[192];
+    char asset_url[512],sha256[65];
     char version[32],notes[4096],message[160];
 } AmUpdate;
 /* The transport is injectable so offline gating and response failures can be
@@ -25,5 +26,6 @@ typedef struct {
 int am_update_parse(const char *json,size_t size,const char *current,AmUpdate *out);
 void am_update_check_with_transport(AmUpdate *out,const char *current,const AmUpdateTransport *transport);
 void am_update_check(AmUpdate *out);
+int am_update_download(const AmUpdate *release,const char *path,AmUpdate *out);
 void am_update_diagnostic(const AmUpdate *result,char *text,size_t cap);
 #endif

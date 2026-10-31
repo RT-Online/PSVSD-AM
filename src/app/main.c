@@ -11,11 +11,15 @@
 #include "ui.h"
 #include "session.h"
 #include "touch.h"
+#include "update_install.h"
+#include <psp2/io/stat.h>
 
 static AmUi model;
 static AmUpdate update_result;
 static int update_thread=-1;
 static unsigned update_done;
+static int update_quiet,update_installing;
+static AmUpdate install_release;
 static uint64_t last_update_check;
 
 static AccessorySession session;
@@ -133,7 +137,13 @@ finish:
 }
 static int update_worker(SceSize argc,void *args) {
     (void)argc;(void)args;
-    am_update_check(&update_result);
+    if (update_installing) {
+        if (am_update_download(&install_release,AM_UPDATE_VPK,&update_result)==0) {
+            snprintf(update_result.stage,sizeof(update_result.stage),"Stage verified VPK / installer");
+            if (am_update_prepare(install_release.version,update_result.reason,sizeof(update_result.reason))==0)
+                update_result.state=UPDATE_INSTALLED;
+        }
+    } else am_update_check(&update_result);
     __atomic_store_n(&update_done,1,__ATOMIC_RELEASE);
     return 0;
 }
@@ -145,12 +155,15 @@ static void update_report(void) {
     char exported[192];int result=am_export_report(details,exported,sizeof(exported));
     if (result<0) snprintf(model.message,sizeof(model.message),"Report export failed (%08X); update details are shown above.",(unsigned)result);
 }
-static void check_updates(void) {
+static void check_updates(int quiet) {
+    if (update_thread>=0) return;
+    update_quiet=quiet;update_installing=0;
     uint64_t now=sceKernelGetProcessTimeWide();
     if (last_update_check && now-last_update_check<AM_UPDATE_INTERVAL_US) {
         snprintf(model.message,sizeof(model.message),"Please wait a minute between GitHub checks.");return;
     }
-    model.message[0]=0;model.busy=1;model.update_page=0;
+    if (!quiet) model.message[0]=0;
+    model.busy=!quiet;model.update_page=0;
     memset(&model.update,0,sizeof(model.update));model.update.state=UPDATE_CHECKING;
     __atomic_store_n(&update_done,0,__ATOMIC_RELAXED);draw();
     update_thread=sceKernelCreateThread("PSVSDAMUpdates",update_worker,0x10000100,0x10000,0,0,NULL);
@@ -161,7 +174,7 @@ static void check_updates(void) {
         update_thread=-1;model.busy=0;model.update.state=UPDATE_ERROR;
         model.update.error=ret;snprintf(model.update.stage,sizeof(model.update.stage),"Create / start update worker");
         snprintf(model.update.message,sizeof(model.update.message),"Could not start update check.");
-        am_log("Update worker failed: %08X\n",(unsigned)ret);update_report();redraw=1;
+        am_log("Update worker failed: %08X\n",(unsigned)ret);if (!quiet) update_report();redraw=1;
     }
 }
 static void finish_update_check(void) {
@@ -169,7 +182,37 @@ static void finish_update_check(void) {
     sceKernelWaitThreadEnd(update_thread,NULL,NULL);sceKernelDeleteThread(update_thread);update_thread=-1;
     model.update=update_result;model.busy=0;redraw=1;
     if (model.update.state!=UPDATE_OFFLINE) last_update_check=sceKernelGetProcessTimeWide();
-    update_report();
+    if (update_installing) {
+        update_report();
+        if (model.update.state==UPDATE_INSTALLED) {
+            int ret=am_update_launch_installer();
+            if (ret>=0) sceKernelExitProcess(0);
+            snprintf(model.message,sizeof(model.message),"Installer launch failed: %08X",(unsigned)ret);
+            am_log("Installer launch failed: %08X\n",(unsigned)ret);
+        }
+        update_installing=0;
+    } else if (!update_quiet) update_report();
+    else {
+        am_log("Launch update check: state=%d latest=%s error=%08X\n",model.update.state,model.update.version,(unsigned)model.update.error);
+        if (model.update.state==UPDATE_AVAILABLE && !model.message[0])
+            snprintf(model.message,sizeof(model.message),"Update %s available. Open Updates to install.",model.update.version);
+    }
+}
+static void install_update(void) {
+    if (update_thread>=0) return;
+    if (model.dirty) { snprintf(model.message,sizeof(model.message),"Save or discard pending mount changes before updating.");return; }
+    if (model.update.state!=UPDATE_AVAILABLE || !model.update.asset_url[0]) return;
+    sceIoMkdir(AM_UPDATE_ROOT,0777);
+    install_release=model.update;update_installing=1;update_quiet=0;model.busy=1;model.update.state=UPDATE_INSTALLING;
+    snprintf(model.update.message,sizeof(model.update.message),"Downloading and verifying update... Please wait.");
+    model.message[0]=0;__atomic_store_n(&update_done,0,__ATOMIC_RELAXED);draw();
+    update_thread=sceKernelCreateThread("PSVSDAMInstall",update_worker,0x10000100,0x20000,0,0,NULL);
+    int ret=update_thread;if (ret>=0) ret=sceKernelStartThread(update_thread,0,NULL);
+    if (ret<0) {
+        if (update_thread>=0) sceKernelDeleteThread(update_thread);
+        update_thread=-1;update_installing=0;model.busy=0;model.update=install_release;
+        snprintf(model.message,sizeof(model.message),"Could not start installer: %08X",(unsigned)ret);
+    }
 }
 static int init_display(void) {
     SceUID block=sceKernelAllocMemBlock("PSVSDAMDisplay",SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW,4*1024*1024,NULL);
@@ -196,6 +239,15 @@ int main(void) {
     am_touch_block(&touch_state);
     am_log("Front touch: sampling=%08X panel=%08X bounds=%d,%d..%d,%d enabled=%d\n",
            (unsigned)touch_start,(unsigned)touch_info,panel.minDispX,panel.minDispY,panel.maxDispX,panel.maxDispY,model.touch_available);
+    FILE *installed=fopen(AM_UPDATE_ROOT "/result","rb");
+    if (installed) {
+        char result[16]={0};fread(result,1,8,installed);fclose(installed);remove(AM_UPDATE_ROOT "/result");
+        am_log("Installer result: %s\n",result);
+        if (!strcmp(result,"00000000")) snprintf(model.message,sizeof(model.message),"Update installed. Saved mount settings retained.");
+        else snprintf(model.message,sizeof(model.message),"Update installation failed (%s). See Log.",result);
+        am_package_remove_helper();
+    }
+    check_updates(1);
     unsigned previous=0,ticks=0;int exiting=0;
     while (!exiting) {
         finish_update_check();
@@ -234,7 +286,8 @@ int main(void) {
             refresh_log();model.log_page=am_ui_log_pages(model.log)-1;
         }
         if (action!=ACTION_NONE) redraw=1;
-        if (action==ACTION_CHECK_UPDATES) check_updates();
+        if (action==ACTION_CHECK_UPDATES) check_updates(0);
+        else if (action==ACTION_INSTALL_UPDATE) install_update();
         else if (action==ACTION_TEST) test();
         else if (action==ACTION_LOG) refresh_log();
         else if (action==ACTION_CLEAR_LOG) {

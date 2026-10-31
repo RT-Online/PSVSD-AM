@@ -81,6 +81,13 @@ int main(int argc,char **argv) {
     int n=snprintf(large,sizeof(large),"{\"tag_name\":\"v1.0.2\",\"draft\":false,\"prerelease\":false,\"body\":\"");
     memset(large+n,'B',5000);strcpy(large+n+5000,"\"}");
     assert(am_update_parse(large,strlen(large),"1.0.2",&out)==0 && strlen(out.notes)==sizeof(out.notes)-1);++cases;
+    const char *asset="{\"tag_name\":\"v1.2.0\",\"draft\":false,\"prerelease\":false,\"assets\":[{\"name\":\"PSVSD_AM_1.2.0.vpk\",\"browser_download_url\":\"https://github.com/RT-Online/PSVSD-AM/releases/download/v1.2.0/PSVSD_AM_1.2.0.vpk\",\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}]}";
+    assert(am_update_parse(asset,strlen(asset),"1.1.0",&out)==0 && out.state==UPDATE_AVAILABLE && out.asset_url[0] && strlen(out.sha256)==64);++cases;
+    char unsafe[1024];snprintf(unsafe,sizeof(unsafe),"%s",asset);
+    char *owner=strstr(unsafe,"RT-Online");assert(owner);memcpy(owner,"XX-Online",9);
+    assert(am_update_parse(unsafe,strlen(unsafe),"1.1.0",&out)==0 && !out.asset_url[0]);++cases;
+    snprintf(unsafe,sizeof(unsafe),"%s",asset);char *sha=strstr(unsafe,"sha256:");assert(sha);sha[7]='z';
+    assert(am_update_parse(unsafe,strlen(unsafe),"1.1.0",&out)==0 && !out.asset_url[0]);++cases;
     if (argc>1) {
         FILE *file=fopen(argv[1],"rb");assert(file);char *json=malloc(AM_RELEASE_MAX_BYTES+1);assert(json);
         size_t used=fread(json,1,AM_RELEASE_MAX_BYTES,file);assert(!ferror(file));fclose(file);

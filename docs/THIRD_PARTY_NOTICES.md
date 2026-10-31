@@ -30,3 +30,14 @@ https://github.com/madler/zlib
 https://github.com/facebook/zstd
 Vita port/build recipes and patches: https://github.com/vitasdk/packages
 CA extraction provenance: https://curl.se/docs/caextract.html
+
+Optional in-app installation uses VitaShell's separate updater and promoter
+sequence and fake-package header algorithm/template, Copyright (C) 2015–2018
+TheFloW, GPL-3.0-or-later. Primary references:
+https://github.com/TheOfficialFloW/VitaShell/blob/master/updater/main.c
+https://github.com/TheOfficialFloW/VitaShell/blob/master/package_installer.c
+https://github.com/TheOfficialFloW/VitaShell/blob/master/resources/head.bin
+The bounded staging, validation, UI and handoff code is supplied in this source.
+Minizip unzip/ioapi sources are from madler/zlib v1.3.1, contrib/minizip; original
+Gilles Vollant / Mathias Svensson copyright and zlib notices remain in those files.
+https://github.com/madler/zlib/tree/v1.3.1/contrib/minizip

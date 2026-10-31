@@ -16,6 +16,11 @@ int am_touch_point(const AmTouchBounds *b,int rx,int ry,int *x,int *y) {
 }
 int am_ui_tap(AmUi *m,int x,int y) {
     if (m->busy) return ACTION_NONE;
+    if (m->update_confirm) {
+        if (inside(x,y,AM_CONFIRM_X,AM_CONFIRM_Y,AM_CONFIRM_W,AM_CONFIRM_H)) { m->update_choice=0;return am_ui_input(m,AM_CROSS); }
+        if (inside(x,y,AM_CANCEL_X,AM_CONFIRM_Y,AM_CONFIRM_W,AM_CONFIRM_H)) return am_ui_input(m,AM_CIRCLE);
+        return ACTION_NONE;
+    }
     if (m->clear_confirm) {
         if (inside(x,y,AM_BACK_X,AM_FOOTER_Y,AM_BACK_W,AM_FOOTER_H)) return am_ui_input(m,AM_CIRCLE);
         if (inside(x,y,AM_CONFIRM_X,AM_CONFIRM_Y,AM_CONFIRM_W,AM_CONFIRM_H)) {
@@ -39,7 +44,7 @@ int am_ui_tap(AmUi *m,int x,int y) {
         if (inside(x,y,AM_NEXT_X,AM_FOOTER_Y,AM_PAGE_W,AM_FOOTER_H)) return am_ui_input(m,AM_RIGHT);
         if (m->nav==VIEW_LOG && inside(x,y,AM_CLEAR_X,AM_FOOTER_Y,AM_CLEAR_W,AM_FOOTER_H)) return am_ui_input(m,AM_TRIANGLE);
     }
-    if (m->nav==VIEW_UPDATES && inside(x,y,AM_UPDATE_X,AM_UPDATE_Y,AM_UPDATE_W,AM_UPDATE_H)) return ACTION_CHECK_UPDATES;
+    if (m->nav==VIEW_UPDATES && inside(x,y,AM_UPDATE_X,AM_UPDATE_Y,AM_UPDATE_W,AM_UPDATE_H)) return am_ui_input(m,AM_CROSS);
     if (m->nav==VIEW_SETTINGS && inside(x,y,276,214,628,72)) {
         m->editing=1;m->field=0;return am_ui_input(m,AM_CROSS);
     }

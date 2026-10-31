@@ -88,6 +88,14 @@ int main(int argc,char **argv) {
     m.update_page=0;am_ui_input(&m,AM_RIGHT);assert(m.update_page==1);
     am_ui_input(&m,AM_LEFT);assert(!m.update_page);
     for (unsigned i=0;i<16;++i) assert(buffer.before[i]==0xDEADBEEF && buffer.after[i]==0xDEADBEEF);
+    memset(&m,0,sizeof(m));m.nav=VIEW_UPDATES;m.update.state=UPDATE_AVAILABLE;
+    strcpy(m.update.version,"v1.2.0");strcpy(m.update.asset_url,"https://github.com/RT-Online/PSVSD-AM/releases/download/v1.2.0/app.vpk");
+    assert(am_ui_input(&m,AM_CROSS)==ACTION_NONE && m.update_confirm && m.update_choice==1);
+    am_ui_render(buffer.pixels,&m);if (argc>1) dump(argv[1],"UpdateConfirm");
+    assert(am_ui_input(&m,AM_CROSS)==ACTION_NONE && !m.update_confirm);
+    am_ui_input(&m,AM_CROSS);am_ui_input(&m,AM_LEFT);
+    assert(am_ui_input(&m,AM_CROSS)==ACTION_INSTALL_UPDATE && !m.update_confirm);
+    am_ui_input(&m,AM_CROSS);assert(am_ui_input(&m,AM_CIRCLE)==ACTION_NONE && !m.update_confirm);
     puts("ui: menu/log pages, render bounds, save choices, Circle/clear confirmation and busy copy/verification views passed");
     return 0;
 }
