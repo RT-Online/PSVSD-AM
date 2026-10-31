@@ -23,7 +23,7 @@ int main(int argc,char **argv) {
     for (int page=0;page<AM_NAV_COUNT;++page) {
         m.nav=page;am_ui_render(buffer.pixels,&m);
         for (unsigned i=0;i<16;++i) assert(buffer.before[i]==0xDEADBEEF && buffer.after[i]==0xDEADBEEF);
-        if (argc>1) { const char *names[]={"Overview","Settings","Test","Log","Credits","Reboot","Exit"};dump(argv[1],names[page]); }
+        if (argc>1) { const char *names[]={"Overview","Settings","Test","Log","Updates","Credits","Reboot","Exit"};dump(argv[1],names[page]); }
     }
     m.saved=(AmSettings){1,AM_UMA0};m.pending=m.saved;
     m.nav=VIEW_SETTINGS;assert(am_ui_input(&m,AM_CROSS)==ACTION_NONE && m.editing);
@@ -72,6 +72,18 @@ int main(int argc,char **argv) {
     m.copy.bytes_done=m.copy.total_bytes;m.copy.files_done=m.copy.total_files;m.copy.percent=99;
     strcpy(m.copy.phase,"Verifying installed files");am_ui_render(buffer.pixels,&m);
     if (argc>1) dump(argv[1],"VerifyingApps");
+    for (unsigned i=0;i<16;++i) assert(buffer.before[i]==0xDEADBEEF && buffer.after[i]==0xDEADBEEF);
+    am_ui_navigate(&m,VIEW_UPDATES);m.busy=0;m.copy_active=0;
+    assert(am_ui_input(&m,AM_CROSS)==ACTION_CHECK_UPDATES);
+    m.update.state=UPDATE_OFFLINE;strcpy(m.update.message,"Connect to Wi-Fi to check for updates.");
+    am_ui_render(buffer.pixels,&m);if (argc>1) dump(argv[1],"UpdatesOffline");
+    m.update.state=UPDATE_AVAILABLE;strcpy(m.update.version,"v1.0.4");
+    strcpy(m.update.message,"A newer release is available.");
+    for (unsigned i=0;i<3000;++i) m.update.notes[i]=i%60==59?'\n':'A';
+    m.update.notes[3000]=0;unsigned update_pages=am_ui_update_pages(m.update.notes);assert(update_pages>1);
+    for (m.update_page=0;m.update_page<update_pages;++m.update_page) am_ui_render(buffer.pixels,&m);
+    m.update_page=0;am_ui_input(&m,AM_RIGHT);assert(m.update_page==1);
+    am_ui_input(&m,AM_LEFT);assert(!m.update_page);
     for (unsigned i=0;i<16;++i) assert(buffer.before[i]==0xDEADBEEF && buffer.after[i]==0xDEADBEEF);
     puts("ui: menu/log pages, render bounds, save choices, Circle/clear confirmation and busy copy/verification views passed");
     return 0;

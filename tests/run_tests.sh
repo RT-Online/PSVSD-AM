@@ -33,3 +33,6 @@ cc -std=c99 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
   "$test_dir/../src/app/ui.c" "$test_dir/../src/app/controller.c" \
   "$test_dir/../src/common/settings.c" -o "$test_out/test_touch"
 ASAN_OPTIONS=detect_leaks=0 "$test_out/test_touch"
+cc -std=c99 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
+  -I"$test_dir" "$test_dir/test_updates.c" "$test_dir/../src/app/updates.c" -o "$test_out/test_updates"
+ASAN_OPTIONS=detect_leaks=0 "$test_out/test_updates" ${PSVSD_AM_RELEASE_FIXTURE:+"$PSVSD_AM_RELEASE_FIXTURE"}

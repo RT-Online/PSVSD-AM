@@ -6,7 +6,7 @@ if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     message(FATAL_ERROR "Set VITASDK to your VitaSDK installation")
   endif()
 endif()
-project(psvsd_am VERSION 1.0.1 LANGUAGES C)
+project(psvsd_am VERSION 1.0.3 LANGUAGES C)
 include("${VITASDK}/share/vita.cmake" REQUIRED)
 set(CMAKE_C_STANDARD 99)
 
@@ -42,13 +42,13 @@ foreach(mode IN ITEMS psvsd_am usbmc_accessory_probe psvsd_am_status)
   clean_vita_self(${mode}.skprx ${mode} CONFIG ${exports} UNSAFE)
 endforeach()
 
-add_executable(psvsd_am_app app/main.c app/session.c app/manager.c app/prepare.c app/ui.c app/controller.c app/touch.c common/settings.c)
+add_executable(psvsd_am_app app/main.c app/session.c app/manager.c app/prepare.c app/ui.c app/controller.c app/touch.c app/updates.c app/update_network.c common/settings.c)
 target_compile_options(psvsd_am_app PRIVATE -Wall -Wextra -Werror -O2 -fno-builtin-printf)
 target_link_libraries(psvsd_am_app SceDisplay_stub SceCtrl_stub SceProcessmgr_stub
-  SceIofilemgr_stub SceLibKernel_stub SceVshBridge_stub ScePower_stub SceTouch_stub taihen_stub)
+  SceIofilemgr_stub SceLibKernel_stub SceVshBridge_stub ScePower_stub SceTouch_stub SceNet_stub SceNetCtl_stub SceHttp_stub SceSsl_stub SceSysmodule_stub taihen_stub)
 clean_vita_self(psvsd_am_app.self psvsd_am_app UNSAFE)
 vita_create_vpk(PSVSD_AM.vpk RTPSV0001 psvsd_am_app.self
-  VERSION 01.01 NAME "PSVSD/AM"
+  VERSION 01.03 NAME "PSVSD/AM"
   FILE "${CMAKE_CURRENT_BINARY_DIR}/usbmc_accessory_probe.skprx" usbmc_accessory_probe.skprx
   FILE "${CMAKE_CURRENT_BINARY_DIR}/psvsd_am.skprx" psvsd_am.skprx
   FILE "${CMAKE_CURRENT_BINARY_DIR}/psvsd_am_status.skprx" psvsd_am_status.skprx

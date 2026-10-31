@@ -13,6 +13,11 @@
 #include "touch.h"
 
 static AmUi model;
+static AmUpdate update_result;
+static int update_thread=-1;
+static unsigned update_done;
+static uint64_t last_update_check;
+
 static AccessorySession session;
 static uint32_t *framebuffers[2];
 static unsigned front;
@@ -126,6 +131,38 @@ finish:
     char note[192];am_export_report(session.attempted?session.text:NULL,note,sizeof(note));
     redraw=1;
 }
+static int update_worker(SceSize argc,void *args) {
+    (void)argc;(void)args;
+    am_update_check(&update_result);
+    __atomic_store_n(&update_done,1,__ATOMIC_RELEASE);
+    return 0;
+}
+static void check_updates(void) {
+    uint64_t now=sceKernelGetProcessTimeWide();
+    if (last_update_check && now-last_update_check<AM_UPDATE_INTERVAL_US) {
+        snprintf(model.message,sizeof(model.message),"Please wait a minute between GitHub checks.");return;
+    }
+    model.message[0]=0;model.busy=1;model.update_page=0;
+    memset(&model.update,0,sizeof(model.update));model.update.state=UPDATE_CHECKING;
+    __atomic_store_n(&update_done,0,__ATOMIC_RELAXED);draw();
+    update_thread=sceKernelCreateThread("PSVSDAMUpdates",update_worker,0x10000100,0x10000,0,0,NULL);
+    int ret=update_thread;
+    if (ret>=0) ret=sceKernelStartThread(update_thread,0,NULL);
+    if (ret<0) {
+        if (update_thread>=0) sceKernelDeleteThread(update_thread);
+        update_thread=-1;model.busy=0;model.update.state=UPDATE_ERROR;
+        snprintf(model.update.message,sizeof(model.update.message),"Could not start update check.");
+        am_log("Update worker failed: %08X\n",(unsigned)ret);redraw=1;
+    }
+}
+static void finish_update_check(void) {
+    if (update_thread<0 || !__atomic_load_n(&update_done,__ATOMIC_ACQUIRE)) return;
+    sceKernelWaitThreadEnd(update_thread,NULL,NULL);sceKernelDeleteThread(update_thread);update_thread=-1;
+    model.update=update_result;model.busy=0;redraw=1;
+    if (model.update.state!=UPDATE_OFFLINE) last_update_check=sceKernelGetProcessTimeWide();
+    am_log("Update check: state=%d HTTP=%d error=%08X latest=%s\n",model.update.state,
+           model.update.http_status,(unsigned)model.update.error,model.update.version);
+}
 static int init_display(void) {
     SceUID block=sceKernelAllocMemBlock("PSVSDAMDisplay",SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW,4*1024*1024,NULL);
     if (block<0) return block;
@@ -153,6 +190,7 @@ int main(void) {
            (unsigned)touch_start,(unsigned)touch_info,panel.minDispX,panel.minDispY,panel.maxDispX,panel.maxDispY,model.touch_available);
     unsigned previous=0,ticks=0;int exiting=0;
     while (!exiting) {
+        finish_update_check();
         if (redraw) draw();
         SceCtrlData pad;memset(&pad,0,sizeof(pad));sceCtrlPeekBufferPositive(0,&pad,1);
         unsigned pressed=pad.buttons&~previous;previous=pad.buttons;
@@ -184,7 +222,8 @@ int main(void) {
             }
         }
         if (action!=ACTION_NONE) redraw=1;
-        if (action==ACTION_TEST) test();
+        if (action==ACTION_CHECK_UPDATES) check_updates();
+        else if (action==ACTION_TEST) test();
         else if (action==ACTION_LOG) refresh_log();
         else if (action==ACTION_CLEAR_LOG) {
             am_clear_logs(model.message,sizeof(model.message));accessory_session_clear_log(&session);

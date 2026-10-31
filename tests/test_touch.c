@@ -65,5 +65,8 @@ int main(void) {
     reset(&m,&s);m.nav=VIEW_LOG;tap(&m,&s,540,520);
     assert(tap(&m,&s,850,520)==ACTION_NONE && !m.clear_confirm && m.nav==VIEW_LOG);
     reset(&m,&s);assert(tap(&m,&s,540,520)==ACTION_NONE && !m.clear_confirm);
+    reset(&m,&s);tap(&m,&s,100,300);assert(m.nav==VIEW_UPDATES);
+    assert(tap(&m,&s,800,145)==ACTION_CHECK_UPDATES);
+    m.busy=1;assert(tap(&m,&s,800,145)==ACTION_NONE);
     printf("touch: %d tap, gesture, coordinate and cancellation cases passed\n",cases);return 0;
 }

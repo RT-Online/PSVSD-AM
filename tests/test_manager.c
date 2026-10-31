@@ -31,6 +31,7 @@ static struct {
     const char *fail_open;
     int zero_copy_write,copy_close_fail,dir_error,invalid_dir_name;
     int source_change,tai_change,boot_change,yamt_change,lose_usb;
+    int add_source,add_destination,fail_rollback;
     int request_calls,request_error,request_no_mount;
 } cfg;
 static int err(void) { return (int)(0x80010000u|(unsigned)errno); }
@@ -80,6 +81,7 @@ int sceIoRemove(const char *p) {
 }
 int sceIoRename(const char *a,const char *b) {
     if (cfg.fail_rename && !cfg.rename_failed && !strcmp(b,cfg.fail_rename)) { cfg.rename_failed=1;return (int)0x80010005; }
+    if (cfg.fail_rollback && strstr(a,"/old/")) return (int)0x80010005;
     char x[512],y[512];return rename(mapped(a,x),mapped(b,y))<0?err():0;
 }
 int sceIoDopen(const char *p) {
@@ -159,6 +161,12 @@ static void copy_cb(const AmCopyProgress *p,void *ctx) {
         char file[512];FILE *f=fopen(mapped("ux0:app/VITASHELL/resources/data.bin",file),"ab");assert(f);fputc(1,f);fclose(f);cfg.source_change=0;
     }
     if (cfg.lose_usb && !strcmp(p->phase,"Copying app files")) { cfg.module=0;cfg.lose_usb=0; }
+    if (cfg.add_source && !strcmp(p->phase,"Flushing copied files")) {
+        put("ux0:app/RTPSV0001/new-source-file","new");cfg.add_source=0;
+    }
+    if (cfg.add_destination && !strcmp(p->phase,"Installing verified folders")) {
+        put("uma0:app/RTPSV0001/unexpected-file","extra");cfg.add_destination=0;
+    }
     if (p->percent==100) {
         if (cfg.tai_change) put(AM_TAI_CONFIG,"*KERNEL\nur0:tai/changed-elsewhere.skprx\n");
         if (cfg.boot_change) put("ur0:tai/boot_config.txt","load ur0:tai/changed-elsewhere.skprx\n");
@@ -345,13 +353,13 @@ int main(void) {
     reset();put(AM_APP_LOG,"preserve on invalid arguments");
     assert(am_clear_logs(message,0)<0);get(AM_APP_LOG,other);assert(!strcmp(other,"preserve on invalid arguments"));
     /* Save-to-ux0 integration: copy both complete installed app folders,
-       overwrite existing files, preserve extras, verify, then commit settings. */
+       replace complete folders, remove extras, verify, then commit settings. */
     reset();copy_fixture();s=(AmSettings){1,AM_UX0};cfg.partial=1;get(AM_TAI_CONFIG,out);
     assert(am_save_settings_with_progress(&s,copy_cb,NULL,message,sizeof(message))==0);
     assert(cfg.copy_callbacks>10 && cfg.copy_percent==100 && am_load_settings(&s)==0 && s.enabled && s.target==AM_UX0);
     get("uma0:app/RTPSV0001/eboot.bin",other);assert(!strcmp(other,"app"));
     get("uma0:app/VITASHELL/eboot.bin",other);assert(!strcmp(other,"shell"));
-    get("uma0:app/VITASHELL/user-extra",other);assert(!strcmp(other,"keep this extra destination file"));
+    assert(!local_exists("uma0:app/VITASHELL/user-extra"));
     get("uma0:app/RTPSV0001/assets/.hidden",other);assert(!strcmp(other,"hidden content"));
     SceIoStat copied;assert(sceIoGetstat("uma0:app/VITASHELL/resources/zero",&copied)==0 && !copied.st_size);
     assert(sceIoGetstat("uma0:app/VITASHELL/resources/empty",&copied)==0 && SCE_S_ISDIR(copied.st_mode));
@@ -368,7 +376,7 @@ int main(void) {
             case 0:cfg.copy_full=1;break;
             case 1:cfg.copy_corrupt=1;break;
             case 2:cfg.sync_fail=1;break;
-            case 3:cfg.fail_rename="uma0:app/VITASHELL/eboot.bin";break;
+            case 3:cfg.fail_rename="uma0:app/VITASHELL";break;
             case 4:cfg.final_corrupt=1;break;
             case 5:cfg.zero_copy_write=1;break;
             case 6:cfg.copy_close_fail=1;break;
@@ -391,8 +399,8 @@ int main(void) {
     assert(am_save_settings(&s,message,sizeof(message))<0 && !local_exists(AM_SETTINGS_PATH));
     reset();copy_fixture();assert(sceIoRemove("uma0:app/RTPSV0001/eboot.bin")==0);
     assert(sceIoMkdir("uma0:app/RTPSV0001/eboot.bin",0700)==0);s=(AmSettings){1,AM_UX0};
-    assert(am_save_settings(&s,message,sizeof(message))<0 && !local_exists(AM_SETTINGS_PATH));
-    assert(sceIoGetstat("uma0:app/RTPSV0001/eboot.bin",&copied)==0 && SCE_S_ISDIR(copied.st_mode));
+    assert(am_save_settings(&s,message,sizeof(message))==0);
+    assert(sceIoGetstat("uma0:app/RTPSV0001/eboot.bin",&copied)==0 && SCE_S_ISREG(copied.st_mode));
     reset();copy_fixture();put(ACCESSORY_KERNEL_DIR "/runtime.txt","stale");s=(AmSettings){1,AM_UX0};
     assert(am_save_settings_with_progress(&s,copy_cb,NULL,message,sizeof(message))<0 && !cfg.copy_callbacks);
     assert(!local_exists("uma0:data/PSVSD_AM"));
@@ -443,6 +451,35 @@ int main(void) {
     assert(am_save_settings_with_callbacks(&s,&callbacks,message,sizeof(message))<0 && !cfg.request_calls && !cfg.copy_callbacks);
     reset();copy_fixture();put(ACCESSORY_KERNEL_DIR "/runtime.txt","PSVSD/AM " ACCESSORY_VERSION "\nRequest: 00001234\nMount: ux0:\n");s=(AmSettings){1,AM_UX0};
     assert(am_save_settings_with_callbacks(&s,&callbacks,message,sizeof(message))==0 && !cfg.request_calls && !cfg.copy_callbacks);
+    /* Exact replacement removes stale files/dirs, repairs type conflicts and
+       keeps every other app and all source-side data untouched. */
+    reset();copy_fixture();s=(AmSettings){1,AM_UX0};
+    assert(sceIoMkdir("uma0:app/RTPSV0001/stale-dir",0700)==0);
+    put("uma0:app/RTPSV0001/stale-dir/.old-icon","obsolete art");
+    assert(sceIoMkdir("uma0:app/OTHERAPP",0700)==0);put("uma0:app/OTHERAPP/keep","unrelated");
+    assert(am_save_settings(&s,message,sizeof(message))==0);
+    assert(!local_exists("uma0:app/RTPSV0001/stale-dir"));
+    assert(!local_exists("uma0:app/VITASHELL/user-extra"));
+    get("uma0:app/OTHERAPP/keep",other);assert(!strcmp(other,"unrelated"));
+    reset();copy_fixture();cfg.add_source=1;s=(AmSettings){1,AM_UX0};
+    assert(am_save_settings_with_progress(&s,copy_cb,NULL,message,sizeof(message))<0);
+    get("uma0:app/RTPSV0001/eboot.bin",other);assert(!strcmp(other,"old app"));
+    assert(!local_exists(AM_SETTINGS_PATH));
+    reset();copy_fixture();cfg.add_destination=1;s=(AmSettings){1,AM_UX0};
+    assert(am_save_settings_with_progress(&s,copy_cb,NULL,message,sizeof(message))<0);
+    get("uma0:app/RTPSV0001/eboot.bin",other);assert(!strcmp(other,"old app"));
+    assert(!local_exists("uma0:app/RTPSV0001/unexpected-file") && !local_exists(AM_SETTINGS_PATH));
+    reset();copy_fixture();cfg.final_corrupt=1;cfg.fail_rollback=1;s=(AmSettings){1,AM_UX0};
+    assert(am_save_settings(&s,message,sizeof(message))<0 && strstr(message,"recovery files retained"));
+    get("uma0:data/PSVSD_AM/prepare-11223344/old/RTPSV0001/eboot.bin",other);assert(!strcmp(other,"old app"));
+    assert(!local_exists(AM_SETTINGS_PATH) && local_exists("uma0:data/PSVSD_AM/prepare-11223344/old/VITASHELL/user-extra"));
+    for (unsigned app=0;app<2;++app) {
+        reset();copy_fixture();s=(AmSettings){1,AM_UX0};
+        cfg.fail_rename=app?"uma0:data/PSVSD_AM/prepare-11223344/old/VITASHELL":"uma0:data/PSVSD_AM/prepare-11223344/old/RTPSV0001";
+        assert(am_save_settings(&s,message,sizeof(message))<0 && !local_exists(AM_SETTINGS_PATH));
+        get("uma0:app/RTPSV0001/eboot.bin",other);assert(!strcmp(other,"old app"));
+        get("uma0:app/VITASHELL/user-extra",other);assert(!strcmp(other,"keep this extra destination file"));
+    }
     printf("manager: %d configuration/status/read-write cases passed\n",cases);
     return 0;
 }

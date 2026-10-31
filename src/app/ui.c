@@ -82,6 +82,35 @@ unsigned am_ui_log_pages(const char *s) {
     unsigned rows=0;while (*s) { char line[256];s=wrap_line(s,line,sizeof(line),620,0);++rows; }
     return rows?(rows+AM_LOG_ROWS-1)/AM_LOG_ROWS:1;
 }
+unsigned am_ui_update_pages(const char *s) {
+    unsigned rows=0;
+    while (*s) { char line[256];s=wrap_line(s,line,sizeof(line),600,0);++rows; }
+    return rows?(rows+AM_UPDATE_ROWS-1)/AM_UPDATE_ROWS:1;
+}
+static void updates_view(const AmUi *m) {
+    title("Updates","Official releases from RT-Online/PSVSD-AM");
+    button(AM_UPDATE_X,AM_UPDATE_Y,AM_UPDATE_W,AM_UPDATE_H,"Check for Updates",!m->busy);
+    round_rect(270,205,640,257,12,CARD);
+    const AmUpdate *u=&m->update;
+    const char *state=u->state==UPDATE_UNCHECKED?"Check when connected to Wi-Fi.":
+        u->state==UPDATE_CHECKING?"Checking Wi-Fi and GitHub...":u->message;
+    wrapped(290,220,state,600,2,1,u->state==UPDATE_ERROR?BAD:ACCENT);
+    char info[128];
+    snprintf(info,sizeof(info),"Installed: %s    Latest: %s",ACCESSORY_VERSION,u->version[0]?u->version:"Not checked");
+    text(290,284,0,TEXT,info);
+    if (u->notes[0]) {
+        const char *s=u->notes;unsigned row=0;
+        while (*s) {
+            char line[256];s=wrap_line(s,line,sizeof(line),600,0);
+            if (row/AM_UPDATE_ROWS==m->update_page) text(290,316+(int)(row%AM_UPDATE_ROWS)*24,0,TEXT,line);
+            ++row;
+        }
+        snprintf(info,sizeof(info),"Release notes: page %u of %u",m->update_page+1,am_ui_update_pages(u->notes));
+        text(290,441,0,MUTED,info);
+    } else {
+        wrapped(290,326,"Manual check only. Connect Wi-Fi in system settings.\nThis checks versions; it does not install updates.",600,3,0,MUTED);
+    }
+}
 static void overview(const AmUi *m) {
     title("Accessory storage","Manage your internal SD card and boot settings.");
     round_rect(276,211,306,111,14,CARD);round_rect(598,211,306,111,14,CARD);
@@ -195,20 +224,21 @@ void am_ui_render(uint32_t *pixels,const AmUi *m) {
     text(32,20,3,TEXT,"PSVSD");text(32+width("PSVSD",3),20,3,ACCENT,"/AM");
     text(34,75,0,MUTED,"Accessory Storage Mount");
     pill(816,36,"v" ACCESSORY_VERSION,0);rect(26,106,908,1,BORDER);
-    const char *items[]={"Overview","Mount setup","Read / write test","Log","Credits","Reboot","Exit"};
+    const char *items[]={"Overview","Mount setup","Read / write test","Log","Updates","Credits","Reboot","Exit"};
     for (int i=0;i<AM_NAV_COUNT;++i) {
-        int y=i<5 ? 124+i*43:388+(i-5)*48;
+        int y=AM_NAV_Y(i);
         if (i==m->nav) { round_rect(24,y,218,38,10,COLOR(21,61,73));rect(25,y+10,3,18,ACCENT); }
         text(42,y+4,1,i==m->nav?TEXT:MUTED,items[i]);
         if (i==VIEW_SETTINGS && m->dirty) pill(194,y+4,"*",1);
     }
-    rect(36,354,190,1,BORDER);
+    rect(36,376,190,1,BORDER);
     round_rect(258,118,666,AM_CONTENT_BOTTOM-118,18,PANEL);
     if (m->copy_active) copy_view(m);
     else switch (m->nav) {
         case VIEW_SETTINGS:settings(m);break;
         case VIEW_TEST:test_view(m);break;
         case VIEW_LOG:log_view(m);break;
+        case VIEW_UPDATES:updates_view(m);break;
         case VIEW_CREDITS:credits();break;
         case VIEW_REBOOT:case VIEW_EXIT:action_view(m);break;
         default:overview(m);break;
@@ -220,6 +250,10 @@ void am_ui_render(uint32_t *pixels,const AmUi *m) {
     if (m->clear_confirm) clear_log_confirmation(m);
     rect(26,AM_FOOTER_Y,908,1,BORDER);
     text(32,501,0,MUTED,m->nav==VIEW_LOG?"Triangle: clear log":m->touch_available?"Touch + D-pad":"D-pad / X / O");
+    if (m->nav==VIEW_UPDATES) {
+        button(AM_PREV_X,AM_FOOTER_BUTTON_Y,AM_PAGE_W,AM_FOOTER_BUTTON_H,"Prev",!m->busy && m->update_page>0);
+        button(AM_NEXT_X,AM_FOOTER_BUTTON_Y,AM_PAGE_W,AM_FOOTER_BUTTON_H,"Next",!m->busy && m->update_page+1<am_ui_update_pages(m->update.notes));
+    }
     if (m->nav==VIEW_LOG) {
         button(AM_PREV_X,AM_FOOTER_BUTTON_Y,AM_PAGE_W,AM_FOOTER_BUTTON_H,"Prev",!m->clear_confirm && m->log_page>0);
         button(AM_NEXT_X,AM_FOOTER_BUTTON_Y,AM_PAGE_W,AM_FOOTER_BUTTON_H,"Next",!m->clear_confirm && m->log_page+1<am_ui_log_pages(m->log));

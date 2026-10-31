@@ -4,7 +4,7 @@
 
 AI tools assisted with code development, documentation, and testing. RefurbedTech directed development and performed hardware testing.
 
-Version **1.0.2** · Vita title ID **RTPSV0001** · Package version **01.02**
+Version **1.0.3** · Vita title ID **RTPSV0001** · Package version **01.03**
 
 ## Features
 
@@ -12,6 +12,7 @@ Version **1.0.2** · Vita title ID **RTPSV0001** · Package version **01.02**
 - Manual secondary mounting and a 4 MiB read/write verification test.
 - Event-driven standby recovery for the owned USB mapping.
 - Touch and controller navigation, diagnostic export, and confirmed log clearing.
+- On-demand GitHub release checks, with Wi-Fi detection and paged release notes.
 - Storage-plugin conflict checks and backed-up configuration changes.
 - Verified copying of PSVSD/AM and VitaShell before switching to USB main storage.
 
@@ -65,6 +66,34 @@ The three kernel payloads are intentional: `psvsd_am.skprx` is the boot plugin, 
 
 ## Validation and license
 
-Host checks: `sh tests/run_tests.sh`. These exercise control flow with mocked Vita APIs; they cannot prove hardware behavior, private firmware offsets or power-loss recovery. Original hardware reports confirmed secondary file transfers/standby recovery and primary mounting. Version 1.0.2 has passed the host suite, a native VitaSDK build and static import checks; console testing is pending.
+Host checks: `sh tests/run_tests.sh`. These exercise control flow with mocked Vita APIs; they cannot prove hardware behavior, private firmware offsets or power-loss recovery. Original hardware reports confirmed secondary file transfers/standby recovery and primary mounting. Version 1.0.3 has passed the host suite, a native VitaSDK build and static import checks; console testing is pending.
 
 GPL-3.0-or-later; see [COPYING](COPYING) and [third-party notices](docs/THIRD_PARTY_NOTICES.md). Derived from USBMC by Yifan Lu and VitaShell storage code by TheFloW. Font and taiHEN SDK components retain their own licenses.
+
+
+## Check for updates
+
+Open **Updates → Check for Updates**. The app first checks for a connected Wi-Fi
+network. When offline it displays **Connect to Wi-Fi to check for updates** and
+makes no HTTP request. It does not enable Wi-Fi or start a connection for you.
+
+When connected, it checks the latest stable public release of
+https://github.com/RT-Online/PSVSD-AM and compares numeric `vMAJOR.MINOR.PATCH`
+tags. It distinguishes an available update, the current public version, and an
+installed build newer than the public release. Release notes are displayed as
+bounded plain text with Prev/Next controls. Use Cross or tap the Check button;
+Left/Right or swipes browse notes.
+
+Checks are manual, run on a worker thread, and are limited to one GitHub attempt
+per minute. There is no startup polling, download, installation, login, token,
+telemetry or storage-setting change. A disconnected network, HTTPS failure,
+missing release, invalid response or rate limit does not change your saved
+mount settings. TLS verification remains enabled; network/TLS operation needs
+console testing. An API check cannot prove that a release is hardware-safe.
+
+### Returning to other main storage
+
+Switching away from USB ux0 currently does not automatically verify or update
+PSVSD/AM and VitaShell on the storage that will become ux0. Keep those recovery
+tools installed and updated on that storage before changing the boot target.
+The new update checker does not resolve this separate preparation gap.

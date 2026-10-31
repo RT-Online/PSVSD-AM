@@ -15,17 +15,19 @@
 typedef struct {
     char *path;
     uint64_t size;
-    int dir,published,old_moved;
+    int dir;
 } CopyItem;
 typedef struct {
     CopyItem *items;
     size_t count,capacity;
+    unsigned published,old_moved;
     char staging[COPY_PATH],failure[COPY_PATH];
     unsigned char *first,*second;
     AmCopyProgress state;
     AmCopyCallback progress;
     void *ctx;
 } Copy;
+static const char *const copy_apps[]={"RTPSV0001","VITASHELL"};
 static int copy_fail(Copy *c,const char *path,int ret) {
     snprintf(c->failure,sizeof(c->failure),"%s",path);return ret<0?ret:COPY_ERROR;
 }
@@ -68,7 +70,7 @@ static int remember(Copy *c,const char *path,int dir,uint64_t size) {
         c->items=p;c->capacity=next;
     }
     char *p=malloc(strlen(path)+1);if (!p) return COPY_ERROR;
-    strcpy(p,path);c->items[c->count++]=(CopyItem){p,size,dir,0,0};
+    strcpy(p,path);c->items[c->count++]=(CopyItem){p,size,dir};
     if (!dir) { c->state.total_bytes+=size;++c->state.total_files; }
     return 0;
 }
@@ -152,7 +154,53 @@ static int verify_file(Copy *c,const CopyItem *item,const char *target,const cha
     if (ret<0) return copy_fail(c,item->path,ret);
     ++c->state.files_done;publish_progress(c,phase,item->path,base,span);return 0;
 }
+/* Verify the complete directory topology against the scanned manifest, including
+ * empty directories and hidden files. Extra or newly added files fail the copy. */
+static int verify_tree(Copy *c,const char *root,const char *rel,unsigned depth,size_t *seen) {
+    char path[COPY_PATH];
+    if (depth>COPY_MAX_DEPTH || path_join(path,sizeof(path),root,rel)<0)
+        return copy_fail(c,rel,COPY_ERROR);
+    const CopyItem *item=NULL;
+    for (size_t i=0;i<c->count;++i) if (!strcmp(c->items[i].path,rel)) { item=&c->items[i];break; }
+    if (!item) return copy_fail(c,path,COPY_ERROR);
+    SceIoStat st;int ret=sceIoGetstat(path,&st);
+    if (ret<0) return copy_fail(c,path,ret);
+    if (item->dir ? !SCE_S_ISDIR(st.st_mode) :
+        !SCE_S_ISREG(st.st_mode) || (uint64_t)st.st_size!=item->size)
+        return copy_fail(c,path,COPY_ERROR);
+    ++*seen;
+    if (!item->dir) return 0;
+    int fd=sceIoDopen(path);if (fd<0) return copy_fail(c,path,fd);
+    SceIoDirent entry;memset(&entry,0,sizeof(entry));
+    while ((ret=sceIoDread(fd,&entry))>0) {
+        if (!valid_name(entry.d_name,sizeof(entry.d_name))) { ret=COPY_ERROR;break; }
+        if (strcmp(entry.d_name,".") && strcmp(entry.d_name,"..")) {
+            char child[COPY_PATH];
+            ret=path_join(child,sizeof(child),rel,entry.d_name);
+            if (ret>=0) ret=verify_tree(c,root,child,depth+1,seen);
+            if (ret<0) break;
+        }
+        memset(&entry,0,sizeof(entry));
+    }
+    int closed=sceIoDclose(fd);
+    return ret<0?copy_fail(c,path,ret):closed<0?copy_fail(c,path,closed):0;
+}
+static int verify_manifest(Copy *c,const char *root) {
+    size_t seen=0;
+    for (unsigned i=0;i<2;++i) {
+        if (!usb_ready()) return copy_fail(c,"USB mapping changed",COPY_ERROR);
+        int ret=verify_tree(c,root,copy_apps[i],0,&seen);
+        if (ret<0) return ret;
+    }
+    return seen==c->count?0:copy_fail(c,root,COPY_ERROR);
+}
 static int verify_all(Copy *c,int installed) {
+    char checked_root[COPY_PATH];
+    if (installed) snprintf(checked_root,sizeof(checked_root),"uma0:app");
+    else if (path_join(checked_root,sizeof(checked_root),c->staging,"new")<0) return COPY_ERROR;
+    int checked=verify_manifest(c,"ux0:app");
+    if (checked>=0) checked=verify_manifest(c,checked_root);
+    if (checked<0) return checked;
     c->state.bytes_done=0;c->state.files_done=0;
     for (size_t i=0;i<c->count;++i) if (!c->items[i].dir) {
         char path[COPY_PATH],root[COPY_PATH];
@@ -170,39 +218,54 @@ static int sync_usb(Copy *c,const char *phase,unsigned percent) {
     publish_progress(c,phase,"uma0:",percent,0);
     int r=sceIoSync("uma0:",0);return r<0?copy_fail(c,phase,r):0;
 }
+/* Promote whole verified folders. The previous trees (including stale files)
+ * remain untouched in staging/old until both replacements pass verification. */
 static int publish_all(Copy *c) {
     c->state.files_done=0;c->state.bytes_done=0;
-    for (size_t i=0;i<c->count;++i) {
-        CopyItem *item=&c->items[i];char target[COPY_PATH],fresh[COPY_PATH],old[COPY_PATH],root[COPY_PATH];
+    for (unsigned i=0;i<2;++i) {
+        char target[COPY_PATH],fresh[COPY_PATH],old[COPY_PATH],root[COPY_PATH];
         if (!usb_ready()) return copy_fail(c,"USB mapping changed",COPY_ERROR);
-        if (path_join(target,sizeof(target),"uma0:app",item->path)<0 ||
-            path_join(root,sizeof(root),c->staging,"new")<0 || path_join(fresh,sizeof(fresh),root,item->path)<0 ||
-            path_join(root,sizeof(root),c->staging,"old")<0 || path_join(old,sizeof(old),root,item->path)<0) return COPY_ERROR;
-        int r=parents(target);if (r<0) return copy_fail(c,target,r);
-        if (item->dir) { r=folder(target);if (r<0) return copy_fail(c,target,r);continue; }
-        SceIoStat st;r=sceIoGetstat(target,&st);
-        if (r>=0) {
-            if (!SCE_S_ISREG(st.st_mode)) return copy_fail(c,target,COPY_ERROR);
-            r=parents(old);if (r>=0) r=sceIoRename(target,old);
-            if (r<0) return copy_fail(c,target,r);
-            item->old_moved=1;
-        } else if (r!=COPY_ENOENT) return copy_fail(c,target,r);
-        r=sceIoRename(fresh,target);if (r<0) return copy_fail(c,target,r);
-        item->published=1;++c->state.files_done;
-        c->state.bytes_done+=item->size;publish_progress(c,"Installing verified files",item->path,70,5);
+        if (path_join(target,sizeof(target),"uma0:app",copy_apps[i])<0 ||
+            path_join(root,sizeof(root),c->staging,"new")<0 || path_join(fresh,sizeof(fresh),root,copy_apps[i])<0 ||
+            path_join(root,sizeof(root),c->staging,"old")<0 || path_join(old,sizeof(old),root,copy_apps[i])<0) return COPY_ERROR;
+        int ret=parents(target);if (ret<0) return copy_fail(c,target,ret);
+        SceIoStat st;ret=sceIoGetstat(target,&st);
+        if (ret>=0) {
+            if (!SCE_S_ISDIR(st.st_mode) && !SCE_S_ISREG(st.st_mode)) return copy_fail(c,target,COPY_ERROR);
+            ret=parents(old);
+            if (ret>=0 && !usb_ready()) ret=COPY_ERROR;
+            if (ret>=0) ret=sceIoRename(target,old);
+            if (ret<0) return copy_fail(c,target,ret);
+            c->old_moved|=1u<<i;
+        } else if (ret!=COPY_ENOENT) return copy_fail(c,target,ret);
+        if (!usb_ready()) return copy_fail(c,"USB mapping changed",COPY_ERROR);
+        ret=sceIoRename(fresh,target);if (ret<0) return copy_fail(c,target,ret);
+        c->published|=1u<<i;
+        size_t prefix=strlen(copy_apps[i]);
+        for (size_t j=0;j<c->count;++j) if (!c->items[j].dir &&
+            !strncmp(c->items[j].path,copy_apps[i],prefix) && c->items[j].path[prefix]=='/') {
+            ++c->state.files_done;c->state.bytes_done+=c->items[j].size;
+        }
+        publish_progress(c,"Installing verified folders",copy_apps[i],70,5);
     }
     return 0;
 }
 static int rollback(Copy *c) {
     int failed=0;
-    for (size_t i=c->count;i>0;--i) {
-        CopyItem *item=&c->items[i-1];if (!item->published && !item->old_moved) continue;
-        char target[COPY_PATH],old[COPY_PATH],root[COPY_PATH];
-        if (path_join(target,sizeof(target),"uma0:app",item->path)<0 ||
-            path_join(root,sizeof(root),c->staging,"old")<0 || path_join(old,sizeof(old),root,item->path)<0) { failed=COPY_ERROR;continue; }
-        int r=item->published?sceIoRemove(target):0;
-        if (r>=0 && item->old_moved) r=sceIoRename(old,target);
-        if (r<0) { failed=r;am_log("USB copy rollback failed %s: %08X\n",target,(unsigned)r); }
+    for (unsigned n=2;n>0;--n) {
+        unsigned i=n-1,bit=1u<<i;
+        if (!((c->published|c->old_moved)&bit)) continue;
+        char target[COPY_PATH],fresh[COPY_PATH],old[COPY_PATH],root[COPY_PATH];
+        if (!usb_ready()) return COPY_ERROR;
+        if (path_join(target,sizeof(target),"uma0:app",copy_apps[i])<0 ||
+            path_join(root,sizeof(root),c->staging,"new")<0 || path_join(fresh,sizeof(fresh),root,copy_apps[i])<0 ||
+            path_join(root,sizeof(root),c->staging,"old")<0 || path_join(old,sizeof(old),root,copy_apps[i])<0) { failed=COPY_ERROR;continue; }
+        /* Move the new tree aside rather than deleting files during recovery. */
+        int ret=(c->published&bit)?sceIoRename(target,fresh):0;
+        if (ret>=0 && (c->old_moved&bit)) {
+            ret=usb_ready()?sceIoRename(old,target):COPY_ERROR;
+        }
+        if (ret<0) { failed=ret;am_log("USB folder rollback failed %s: %08X\n",target,(unsigned)ret); }
     }
     return failed;
 }
@@ -230,7 +293,7 @@ int am_prepare_usb_apps(AmCopyCallback progress,void *ctx,char *message,size_t c
     c->progress=progress;c->ctx=ctx;c->first=malloc(COPY_CHUNK);c->second=malloc(COPY_CHUNK);
     int ret=0;
     if (!c->first || !c->second) { ret=COPY_ERROR;goto done; }
-    am_log("Preparing USB app folders: ux0:app to verified uma0:app; existing files overwrite automatically.\n");
+    am_log("Preparing USB app folders: ux0:app to verified uma0:app; complete folders replaced; destination-only files removed.\n");
     if ((ret=scan(c,"RTPSV0001",0))<0 || (ret=scan(c,"VITASHELL",0))<0) goto done;
     const char *required[]={"RTPSV0001/eboot.bin","VITASHELL/eboot.bin"};
     for (unsigned n=0;n<2;++n) {

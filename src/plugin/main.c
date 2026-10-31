@@ -1,5 +1,5 @@
 /*
- * PSVSD/AM 1.0.1 - PCH-1000 accessory-port storage.
+ * PSVSD/AM 1.0.3 - PCH-1000 accessory-port storage.
  * Derived from USBMC / VitaShell, Copyright (C) 2015-2017 TheFloW.
  * USBMC integration by Yifan Lu; accessory adaptation for RefurbedTech, 2026.
  * SPDX-License-Identifier: GPL-3.0-or-later

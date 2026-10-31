@@ -10,6 +10,12 @@ void am_touch_block(AmTouchState *state);
 int am_touch_point(const AmTouchBounds *bounds,int raw_x,int raw_y,int *x,int *y);
 int am_touch_sample(AmTouchState *state,AmUi *ui,int contacts,int id,int x,int y);
 int am_ui_tap(AmUi *ui,int x,int y);
+#define AM_NAV_Y(i) ((i)<VIEW_REBOOT ? 124+(i)*40 : 388+((i)-VIEW_REBOOT)*48)
+#define AM_UPDATE_X 702
+#define AM_UPDATE_Y 126
+#define AM_UPDATE_W 202
+#define AM_UPDATE_H 42
+#define AM_UPDATE_ROWS 5
 #define AM_FOOTER_Y 480
 #define AM_FOOTER_H 64
 #define AM_FOOTER_BUTTON_Y 492

@@ -27,18 +27,19 @@ int am_ui_tap(AmUi *m,int x,int y) {
         return ACTION_NONE;
     }
     for (int i=0;i<AM_NAV_COUNT;++i) {
-        int top=i<5 ? 122+i*43:386+(i-5)*48;
-        if (inside(x,y,24,top,218,42)) {
+        int top=AM_NAV_Y(i)-2;
+        if (inside(x,y,24,top,218,i<VIEW_REBOOT?40:42)) {
             am_ui_navigate(m,i);return ACTION_NONE;
         }
     }
     if (inside(x,y,AM_BACK_X,AM_FOOTER_Y,AM_BACK_W,AM_FOOTER_H)) return am_ui_input(m,AM_CIRCLE);
     if (inside(x,y,AM_REFRESH_X,AM_FOOTER_Y,AM_REFRESH_W,AM_FOOTER_H)) return ACTION_EXPORT;
-    if (m->nav==VIEW_LOG) {
+    if (m->nav==VIEW_LOG || m->nav==VIEW_UPDATES) {
         if (inside(x,y,AM_PREV_X,AM_FOOTER_Y,AM_PAGE_W,AM_FOOTER_H)) return am_ui_input(m,AM_LEFT);
         if (inside(x,y,AM_NEXT_X,AM_FOOTER_Y,AM_PAGE_W,AM_FOOTER_H)) return am_ui_input(m,AM_RIGHT);
-        if (inside(x,y,AM_CLEAR_X,AM_FOOTER_Y,AM_CLEAR_W,AM_FOOTER_H)) return am_ui_input(m,AM_TRIANGLE);
+        if (m->nav==VIEW_LOG && inside(x,y,AM_CLEAR_X,AM_FOOTER_Y,AM_CLEAR_W,AM_FOOTER_H)) return am_ui_input(m,AM_TRIANGLE);
     }
+    if (m->nav==VIEW_UPDATES && inside(x,y,AM_UPDATE_X,AM_UPDATE_Y,AM_UPDATE_W,AM_UPDATE_H)) return ACTION_CHECK_UPDATES;
     if (m->nav==VIEW_SETTINGS && inside(x,y,276,214,628,72)) {
         m->editing=1;m->field=0;return am_ui_input(m,AM_CROSS);
     }
@@ -73,7 +74,7 @@ int am_touch_sample(AmTouchState *s,AmUi *m,int contacts,int id,int x,int y) {
     int dx=s->last_x-s->start_x,dy=s->last_y-s->start_y;
     if (s->moved) {
         if (m->clear_confirm) return ACTION_NONE;
-        if (m->nav!=VIEW_LOG || s->start_x<258 || s->start_y<200 || s->start_y>=AM_CONTENT_BOTTOM) return ACTION_NONE;
+        if ((m->nav!=VIEW_LOG && m->nav!=VIEW_UPDATES) || s->start_x<258 || s->start_y<200 || s->start_y>=AM_CONTENT_BOTTOM) return ACTION_NONE;
         if (abs(dx)>=60 && abs(dx)>abs(dy)) return am_ui_input(m,dx<0?AM_RIGHT:AM_LEFT);
         if (abs(dy)>=60 && abs(dy)>abs(dx)) return am_ui_input(m,dy<0?AM_RIGHT:AM_LEFT);
         return ACTION_NONE;

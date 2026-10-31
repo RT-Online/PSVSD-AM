@@ -49,10 +49,15 @@ int am_ui_input(AmUi *m,unsigned keys) {
         if ((keys&AM_LEFT) && m->log_page) --m->log_page;
         if ((keys&AM_RIGHT) && m->log_page+1<am_ui_log_pages(m->log)) ++m->log_page;
     }
+    if (m->nav==VIEW_UPDATES) {
+        if ((keys&AM_LEFT) && m->update_page) --m->update_page;
+        if ((keys&AM_RIGHT) && m->update_page+1<am_ui_update_pages(m->update.notes)) ++m->update_page;
+    }
     if (!(keys&AM_CROSS)) return ACTION_NONE;
     switch (m->nav) {
         case VIEW_SETTINGS:case VIEW_REBOOT:case VIEW_EXIT:m->editing=1;m->field=0;break;
         case VIEW_TEST:return ACTION_TEST;
+        case VIEW_UPDATES:return ACTION_CHECK_UPDATES;
         case VIEW_LOG:return ACTION_LOG;
     }
     return ACTION_NONE;
