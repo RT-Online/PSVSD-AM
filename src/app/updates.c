@@ -132,7 +132,7 @@ static int assets(Json *j,AmUpdate *out) {
         }
         size_t len=strlen(name);
         if (len>13 && !strncmp(name,"PSVSD_AM_",9) && !strcmp(name+len-4,".vpk")) {
-            const char *prefix="https://github.com/RT-Online/PSVSD-AM/releases/download/";
+            const char *prefix=AM_RELEASE_DOWNLOAD_PREFIX;
             int valid=!strncmp(url,prefix,strlen(prefix)) && !strncmp(digest,"sha256:",7) && strlen(digest)==71;
             for (unsigned i=7;valid && i<71;++i) valid=(digest[i]>='0' && digest[i]<='9') || (digest[i]>='a' && digest[i]<='f');
             if (valid) {
@@ -214,8 +214,7 @@ void am_update_check_with_transport(AmUpdate *out,const char *current,const AmUp
 }
 
 void am_update_diagnostic(const AmUpdate *result,char *text,size_t cap) {
-    snprintf(text,cap,"Step: %s\nError: %08X  HTTP: %d\n%s\nTLS: %08X  Flags: %08X\nTLS query: %08X  Bytes: %u",
+    snprintf(text,cap,"Step: %s\nError: %08X  HTTP: %d\n%s\nTLS verify: %08X  Bytes: %u",
         result->stage[0]?result->stage:"Not reported",(unsigned)result->error,result->http_status,
-        result->reason,(unsigned)result->ssl_error,result->ssl_flags,
-        (unsigned)result->ssl_query,(unsigned)result->received);
+        result->reason,(unsigned)result->tls_verify,(unsigned)result->received);
 }

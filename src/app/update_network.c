@@ -5,7 +5,6 @@
 #include <psp2/net/netctl.h>
 #include <curl/curl.h>
 #include <psp2/sysmodule.h>
-#include <psp2/kernel/processmgr.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -14,7 +13,7 @@
 typedef struct {
     void *net_memory;
     int net_owned,ctl_owned;
-    unsigned modules;
+    int module_owned;
     const char *stage;
     int curl_error,failed;
     long verify_result;
@@ -23,16 +22,21 @@ typedef struct {
     size_t cap,used;
     int oversized;
 } Network;
-static const SceSysmoduleModuleId modules[]={SCE_SYSMODULE_NET};
-static int load_module(Network *n,unsigned i) {
-    if (sceSysmoduleIsLoaded(modules[i])==0) return 0;
-    int ret=sceSysmoduleLoadModule(modules[i]);
-    if (ret>=0) n->modules|=1u<<i;
+static int load_module(Network *n) {
+    if (sceSysmoduleIsLoaded(SCE_SYSMODULE_NET)==0) return 0;
+    int ret=sceSysmoduleLoadModule(SCE_SYSMODULE_NET);
+    if (ret>=0) n->module_owned=1;
     return ret;
+}
+static void network_close(Network *n) {
+    if (n->ctl_owned) sceNetCtlTerm();
+    if (n->net_owned) sceNetTerm();
+    free(n->net_memory);
+    if (n->module_owned) sceSysmoduleUnloadModule(SCE_SYSMODULE_NET);
 }
 static int wifi(void *context) {
     Network *n=context;int state=0;
-    if (load_module(n,0)<0) return 0;
+    if (load_module(n)<0) return 0;
     if (sceNetShowNetstat()<0) {
         n->net_memory=malloc(256*1024);if (!n->net_memory) return 0;
         SceNetInitParam param={n->net_memory,256*1024,0};
@@ -114,13 +118,10 @@ void am_update_check(AmUpdate *out) {
     if (out->state==UPDATE_ERROR && network.failed) {
         if (network.stage) snprintf(out->stage,sizeof(out->stage),"%s",network.stage);
         out->error=network.curl_error?network.curl_error:out->error;
-        out->ssl_error=(int)network.verify_result;out->ssl_flags=(unsigned)network.verify_result;
+        out->tls_verify=(int)network.verify_result;
         snprintf(out->reason,sizeof(out->reason),"%.191s",network.reason);
     }
-    if (network.ctl_owned) sceNetCtlTerm();
-    if (network.net_owned) sceNetTerm();
-    free(network.net_memory);
-    if (network.modules&1u) sceSysmoduleUnloadModule(SCE_SYSMODULE_NET);
+    network_close(&network);
 }
 
 /* Release downloads are explicit, bounded and digest-checked before staging. */
@@ -130,14 +131,14 @@ static size_t download_bytes(void *data,size_t size,size_t count,void *context) 
     Download *d=context;
     if (size && count>SIZE_MAX/size) return 0;
     size_t bytes=size*count;
-    if (bytes>64u*1024u*1024u-d->used) return 0;
+    if (bytes>AM_DOWNLOAD_MAX_BYTES-d->used) return 0;
     size_t n=fwrite(data,1,bytes,d->file);d->used+=n;return n;
 }
 int am_update_download(const AmUpdate *release,const char *path,AmUpdate *out) {
     Network n={0};Download d={0};CURL *h=NULL;int initialized=0,ret=-1;CURLcode code=CURLE_OK;long status=0;
     memset(out,0,sizeof(*out));out->state=UPDATE_ERROR;
     snprintf(out->stage,sizeof(out->stage),"Download release VPK");
-    if (strncmp(release->asset_url,"https://github.com/RT-Online/PSVSD-AM/releases/download/",56) || strlen(release->sha256)!=64 || !wifi(&n)) { snprintf(out->reason,sizeof(out->reason),"Wi-Fi or verified release asset unavailable.");goto done; }
+    if (strncmp(release->asset_url,AM_RELEASE_DOWNLOAD_PREFIX,strlen(AM_RELEASE_DOWNLOAD_PREFIX)) || strlen(release->sha256)!=64 || !wifi(&n)) { snprintf(out->reason,sizeof(out->reason),"Wi-Fi or verified release asset unavailable.");goto done; }
     d.file=fopen(path,"wb");if (!d.file) { snprintf(out->reason,sizeof(out->reason),"Cannot create update file.");goto done; }
     code=curl_global_init(CURL_GLOBAL_DEFAULT);if (code!=CURLE_OK) goto done;
     initialized=1;h=curl_easy_init();if (!h) { code=CURLE_OUT_OF_MEMORY;goto done; }
@@ -150,6 +151,7 @@ int am_update_download(const AmUpdate *release,const char *path,AmUpdate *out) {
     OPT(CURLOPT_ERRORBUFFER,n.reason);OPT(CURLOPT_WRITEFUNCTION,download_bytes);OPT(CURLOPT_WRITEDATA,&d);
 #undef OPT
     code=curl_easy_perform(h);curl_easy_getinfo(h,CURLINFO_RESPONSE_CODE,&status);
+    curl_easy_getinfo(h,CURLINFO_SSL_VERIFYRESULT,&n.verify_result);
     if (fclose(d.file)!=0) { d.file=NULL;snprintf(out->reason,sizeof(out->reason),"Could not finish writing update.");goto done; }d.file=NULL;
     if (code!=CURLE_OK || status!=200 || !d.used) goto done;
     snprintf(out->stage,sizeof(out->stage),"Verify release SHA-256");
@@ -166,11 +168,8 @@ done:
     if (d.file) fclose(d.file);
     if (h) curl_easy_cleanup(h);
     if (initialized) curl_global_cleanup();
-    if (n.ctl_owned) sceNetCtlTerm();
-    if (n.net_owned) sceNetTerm();
-    free(n.net_memory);
-    if (n.modules&1u) sceSysmoduleUnloadModule(SCE_SYSMODULE_NET);
-    out->http_status=(int)status;out->received=d.used;out->error=code?(int)code:-1;
+    network_close(&n);
+    out->tls_verify=(int)n.verify_result;out->http_status=(int)status;out->received=d.used;out->error=code?(int)code:-1;
     if (ret<0) { remove(path);if (!out->reason[0]) snprintf(out->reason,sizeof(out->reason),"%.191s",n.reason[0]?n.reason:curl_easy_strerror(code)); }
     return ret;
 }

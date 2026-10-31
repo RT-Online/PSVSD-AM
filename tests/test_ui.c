@@ -77,7 +77,7 @@ int main(int argc,char **argv) {
     assert(am_ui_input(&m,AM_CROSS)==ACTION_CHECK_UPDATES);
     m.update.state=UPDATE_OFFLINE;m.update.message[0]=0;
     am_ui_render(buffer.pixels,&m);if (argc>1) dump(argv[1],"UpdatesOffline");
-    m.update.state=UPDATE_ERROR;m.update.error=(int)0x80431075;m.update.ssl_error=(int)0x80435061;
+    m.update.state=UPDATE_ERROR;m.update.error=60;m.update.tls_verify=0x20;
     strcpy(m.update.stage,"Send HTTPS request");strcpy(m.update.message,"Could not check GitHub. See Log.");
     am_ui_render(buffer.pixels,&m);if (argc>1) dump(argv[1],"UpdatesError");
     m.update.state=UPDATE_AVAILABLE;strcpy(m.update.version,"v1.0.4");

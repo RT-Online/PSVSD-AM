@@ -3,14 +3,14 @@
 #define PSVSD_AM_UPDATES_H
 #include <stddef.h>
 #define AM_RELEASE_API "https://api.github.com/repos/RT-Online/PSVSD-AM/releases/latest"
-#define AM_RELEASE_PAGE "https://github.com/RT-Online/PSVSD-AM/releases/latest"
+#define AM_RELEASE_DOWNLOAD_PREFIX "https://github.com/RT-Online/PSVSD-AM/releases/download/"
+#define AM_DOWNLOAD_MAX_BYTES (64u*1024u*1024u)
 #define AM_RELEASE_MAX_BYTES 65536u
 #define AM_UPDATE_INTERVAL_US 60000000u
 enum { UPDATE_UNCHECKED, UPDATE_CHECKING, UPDATE_OFFLINE, UPDATE_CURRENT,
-       UPDATE_AVAILABLE, UPDATE_AHEAD, UPDATE_ERROR, UPDATE_INSTALLING, UPDATE_INSTALLED };
+       UPDATE_AVAILABLE, UPDATE_AHEAD, UPDATE_ERROR, UPDATE_INSTALLING, UPDATE_READY };
 typedef struct {
-    int state,error,http_status,ssl_error,ssl_query;
-    unsigned ssl_flags;
+    int state,error,http_status,tls_verify;
     size_t received;
     char stage[48],reason[192];
     char asset_url[512],sha256[65];

@@ -4,8 +4,6 @@
 #include <psp2/sysmodule.h>
 #include <psp2/promoterutil.h>
 #include <stdint.h>
-#include <stdio.h>
-#include <string.h>
 static int promote(const char *path,int remove) {
     uint32_t args[]={0x180000,(uint32_t)-1,(uint32_t)-1,1,(uint32_t)-1,(uint32_t)-1};
     int result=-1,ret;SceSysmoduleOpt option={16,&result,{-1,-1}};

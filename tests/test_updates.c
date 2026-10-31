@@ -21,6 +21,8 @@ static void parse(const char *tag,const char *installed,int state) {
 int main(int argc,char **argv) {
     parse("v1.0.2","1.0.2",UPDATE_CURRENT);
     parse("v1.1.0","1.1.0",UPDATE_CURRENT);
+    parse("v1.1.1","1.1.1",UPDATE_CURRENT);
+    parse("v1.1.1","1.1.0",UPDATE_AVAILABLE);
     parse("v1.1.0","1.0.3",UPDATE_AVAILABLE);
     parse("v.1.0.3","1.0.3",UPDATE_CURRENT);
     parse("v.1.0.4","1.0.3",UPDATE_AVAILABLE);
@@ -71,9 +73,9 @@ int main(int argc,char **argv) {
     am_update_check_with_transport(&out,"1.0.3",&transport);
     char diagnostic[320];am_update_diagnostic(&out,diagnostic,sizeof(diagnostic));
     assert(strstr(diagnostic,"HTTPS request") && strstr(diagnostic,"FFFFFFC9") && strstr(diagnostic,"HTTP: 0"));++cases;
-    out.ssl_error=(int)0x80435061;out.ssl_flags=0x20;out.ssl_query=-7;
+    out.tls_verify=0x20;strcpy(out.reason,"Certificate verification failed.");
     am_update_diagnostic(&out,diagnostic,sizeof(diagnostic));
-    assert(strstr(diagnostic,"80435061") && strstr(diagnostic,"00000020") && strstr(diagnostic,"FFFFFFF9"));++cases;
+    assert(strstr(diagnostic,"Certificate verification failed") && strstr(diagnostic,"TLS verify: 00000020"));++cases;
     mock.fail=0;mock.status=200;mock.json="not JSON";
     am_update_check_with_transport(&out,"1.0.3",&transport);
     assert(out.state==UPDATE_ERROR && !strcmp(out.stage,"Release JSON / version"));++cases;

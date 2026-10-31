@@ -1,3 +1,15 @@
+# Current maintenance release: 1.1.1
+
+App version 1.1.1; Vita APP_VER 01.11; kernel metadata major 1/minor 11.
+Removed obsolete system-TLS diagnostic fields and an unused release-page URL.
+Network ownership cleanup is shared by release checks and VPK downloads; the
+single NET module no longer uses a generic module array/bitmask. Asset URL prefix
+and download limit are named shared constants. Download failures now retain the
+actual certificate-verification result. Unused includes were removed.
+Silent launch checks and the optional confirmed installer remain unchanged.
+Default-date compatibility and recovery-app preparation remain open issues.
+Historical 1.1.0 implementation/build notes follow.
+
 # 1.1.0 optional in-app update revision
 
 Current behavior supersedes the older check-only descriptions below: one silent

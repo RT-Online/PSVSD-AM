@@ -141,7 +141,7 @@ static int update_worker(SceSize argc,void *args) {
         if (am_update_download(&install_release,AM_UPDATE_VPK,&update_result)==0) {
             snprintf(update_result.stage,sizeof(update_result.stage),"Stage verified VPK / installer");
             if (am_update_prepare(install_release.version,update_result.reason,sizeof(update_result.reason))==0)
-                update_result.state=UPDATE_INSTALLED;
+                update_result.state=UPDATE_READY;
         }
     } else am_update_check(&update_result);
     __atomic_store_n(&update_done,1,__ATOMIC_RELEASE);
@@ -184,7 +184,7 @@ static void finish_update_check(void) {
     if (model.update.state!=UPDATE_OFFLINE) last_update_check=sceKernelGetProcessTimeWide();
     if (update_installing) {
         update_report();
-        if (model.update.state==UPDATE_INSTALLED) {
+        if (model.update.state==UPDATE_READY) {
             int ret=am_update_launch_installer();
             if (ret>=0) sceKernelExitProcess(0);
             snprintf(model.message,sizeof(model.message),"Installer launch failed: %08X",(unsigned)ret);
