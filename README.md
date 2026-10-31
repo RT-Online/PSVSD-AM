@@ -1,6 +1,8 @@
 # PSVSD/AM
 
-**Accessory Storage Mount** by RefurbedTech. A PS Vita PCH-1000 app and kernel plugin for an internal USB microSD reader connected to the accessory port. Version **1.0.1**; Vita title ID **RTPSV0001**, package version **01.01**.
+**Accessory Storage Mount** by RefurbedTech with AI Assistance. 
+A streamlined setup and management app for internal USB microSD storage through the PS Vita 1000 accessory port. PSVSD/AM simplifies ux0/uma0 configuration with automatic mounting, storage conflict checks, read/write verification, and diagnostic logging.
+A PS Vita PCH-1000 app and kernel plugin for an internal USB microSD reader connected to the accessory port. Version **1.0.1**; Vita title ID **RTPSV0001**, package version **01.01**.
 
 ## Features
 
