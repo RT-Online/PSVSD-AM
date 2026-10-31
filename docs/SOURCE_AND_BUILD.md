@@ -1,3 +1,23 @@
+# Current release 1.1.3 — USB copy confirmation fix
+
+Semantic version 1.1.3, APP_VER 01.13, kernel metadata major 1/minor 13.
+Includes the streamed final executable comparison that fixes false USB app
+mismatch errors for TLS-enabled eboot.bin files larger than 1 MiB. Publish
+v1.1.3 with the matching VPK so installed 1.1.2 sees the update. Small releases
+increment the semantic patch number unless explicitly specified otherwise.
+Earlier same-version development notes below are historical, not release guidance.
+
+# 1.1.2 USB app confirmation fix
+
+The TLS-enabled eboot.bin exceeds 1 MiB. The final prepared_usb_app comparison
+previously used read_bytes, whose 1 MiB bound is intended for configuration data.
+The complete folder copier could pass while this final comparison falsely
+reported missing/mismatched eboot.bin and blocked Save. same_file now performs
+streamed exact-byte comparison with 8 KiB fixed buffers, handles partial reads,
+checks sizes/types/end-of-file and closes, and retains the original bounded
+configuration reader. Regression tests cover a >1 MiB app through full Save,
+late-byte corruption, truncation and open failure. Version remains 1.1.2.
+
 # Current release 1.1.2
 
 Version-only release: semantic version 1.1.2, Vita APP_VER 01.12, kernel metadata

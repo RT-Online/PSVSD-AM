@@ -483,6 +483,24 @@ int main(void) {
     reset();
     assert(am_export_report("Step: Send HTTPS request\nError: 80431075",message,sizeof(message))==0);
     get(ACCESSORY_USER_LOG,other);assert(strstr(other,"Send HTTPS request") && strstr(other,"80431075"));
+    /* TLS-enabled executables exceed the configuration reader's 1 MiB cap. */
+    reset();prepare_main();s=(AmSettings){1,AM_UX0};
+    size_t large_size=1024*1024+4097;unsigned char *payload=malloc(large_size);assert(payload);
+    for (size_t i=0;i<large_size;++i) payload[i]=(unsigned char)(i*17u);
+    fixture("app0:eboot.bin",payload,large_size);
+    fixture("ux0:app/RTPSV0001/eboot.bin",payload,large_size);
+    cfg.partial=1;
+    assert(am_save_settings(&s,message,sizeof(message))==0);
+    assert(am_load_settings(&s)==0 && s.enabled && s.target==AM_UX0);
+    assert(same_file("app0:eboot.bin","uma0:app/RTPSV0001/eboot.bin"));++cases;
+    payload[large_size-1]^=1;fixture("uma0:app/RTPSV0001/eboot.bin",payload,large_size);
+    assert(!prepared_usb_app());++cases;
+    fixture("uma0:app/RTPSV0001/eboot.bin",payload,large_size-1);
+    assert(!prepared_usb_app());++cases;
+    fixture("uma0:app/RTPSV0001/eboot.bin",payload,large_size);
+    cfg.fail_open="uma0:app/RTPSV0001/eboot.bin";
+    assert(!prepared_usb_app());++cases;
+    free(payload);
     printf("manager: %d configuration/status/read-write cases passed\n",cases);
     return 0;
 }

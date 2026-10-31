@@ -270,12 +270,31 @@ static int storage_conflict(const char *tai,const char *boot,int target,char *re
     }
     return 0;
 }
+/* Compare executable payloads without the bounded configuration-reader limit. */
+static int file_read_exact(int fd,unsigned char *bytes,size_t size) {
+    while (size) {
+        int ret=sceIoRead(fd,bytes,size);if (ret<=0) return 0;
+        bytes+=ret;size-=(size_t)ret;
+    }
+    return 1;
+}
 static int same_file(const char *a,const char *b) {
-    unsigned char *x=NULL,*y=NULL;size_t xn=0,yn=0;
-    int ret=read_bytes(a,&x,&xn);
-    if (ret>=0) ret=read_bytes(b,&y,&yn);
-    int same=ret>=0 && xn==yn && !memcmp(x,y,xn);
-    free(x);free(y);return same;
+    SceIoStat first,second;
+    if (sceIoGetstat(a,&first)<0 || sceIoGetstat(b,&second)<0 ||
+        !SCE_S_ISREG(first.st_mode) || !SCE_S_ISREG(second.st_mode) ||
+        (int64_t)first.st_size<0 || first.st_size!=second.st_size) return 0;
+    int in=sceIoOpen(a,SCE_O_RDONLY,0);if (in<0) return 0;
+    int out=sceIoOpen(b,SCE_O_RDONLY,0);if (out<0) { sceIoClose(in);return 0; }
+    unsigned char x[4096],y[4096];uint64_t left=(uint64_t)first.st_size;int same=1;
+    while (left) {
+        size_t n=left>sizeof(x)?sizeof(x):(size_t)left;
+        if (!file_read_exact(in,x,n) || !file_read_exact(out,y,n) || memcmp(x,y,n)) { same=0;break; }
+        left-=n;
+    }
+    /* Detect growth after stat, read errors and close failures too. */
+    if (same && (sceIoRead(in,x,1)!=0 || sceIoRead(out,y,1)!=0)) same=0;
+    int closed_in=sceIoClose(in),closed_out=sceIoClose(out);
+    return same && closed_in>=0 && closed_out>=0;
 }
 static int prepared_usb_app(void) {
     if (!present("uma0:app/VITASHELL/eboot.bin")) { am_log("USB app check: missing VitaShell executable.\n");return 0; }
