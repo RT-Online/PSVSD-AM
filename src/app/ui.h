@@ -13,7 +13,8 @@ typedef struct {
     AmSettings pending,saved;
     AmStatus status;
     AmUpdate update;
-    unsigned update_page;
+    unsigned update_page,update_animation;
+    AmUpdateProgress update_progress;
     AmTestResult test;
     int test_attempted,test_passed;
     char message[192],stage[80],log[16384];

@@ -22,6 +22,8 @@ int main(int argc,char **argv) {
     parse("v1.0.2","1.0.2",UPDATE_CURRENT);
     parse("v1.1.0","1.1.0",UPDATE_CURRENT);
     parse("v1.1.1","1.1.1",UPDATE_CURRENT);
+    parse("v1.1.2","1.1.2",UPDATE_CURRENT);
+    parse("v1.1.2","1.1.1",UPDATE_AVAILABLE);
     parse("v1.1.1","1.1.0",UPDATE_AVAILABLE);
     parse("v1.1.0","1.0.3",UPDATE_AVAILABLE);
     parse("v.1.0.3","1.0.3",UPDATE_CURRENT);

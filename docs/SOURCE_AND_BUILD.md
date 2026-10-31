@@ -1,3 +1,31 @@
+# Current release 1.1.2
+
+Version-only release: semantic version 1.1.2, Vita APP_VER 01.12, kernel metadata
+major 1/minor 12. The main app and temporary installer retain the same title IDs.
+Artwork is regenerated with 1.1.2. All progress, shared installer UI and optional
+update behavior from the revised 1.1.1 build is retained. Earlier notes below
+record development history; known limitations remain unchanged.
+
+# Shared updater interface
+
+The temporary installer now links the actual app UI renderer rather than its own
+generic text renderer. Validation, installation, completion and errors use the
+same branded Updates page. The separate helper/promotion handoff remains; a
+brief Vita app transition may still be visible. No reliable helper-free path
+has been verified. Successful updates reopen PSVSD/AM automatically. Function-
+section garbage collection avoids retaining unused helper-side parser routines.
+
+# 1.1.1 progress feedback revision
+
+Added callback-based download, verification and extraction progress. Worker
+progress is published with atomic scalars and a sequence snapshot; only the main
+thread changes its UI model. Unknown totals use an animated bar. The helper runs
+synchronous promotion on a worker while its main thread animates, and shows
+completion only after successful promotion. One reusable display allocation
+replaces the helper's repeated framebuffer allocations. Version stays 1.1.1.
+The Vita promotion API exposes completion state, not percentage; no installation
+percentage is fabricated. Existing limitations below remain.
+
 # Current maintenance release: 1.1.1
 
 App version 1.1.1; Vita APP_VER 01.11; kernel metadata major 1/minor 11.

@@ -126,7 +126,14 @@ void am_update_check(AmUpdate *out) {
 
 /* Release downloads are explicit, bounded and digest-checked before staging. */
 #include <mbedtls/sha256.h>
-typedef struct { FILE *file;size_t used; } Download;
+typedef struct { FILE *file;size_t used;AmUpdateProgressCallback progress;void *context; } Download;
+static int download_progress(void *context,curl_off_t total,curl_off_t done,curl_off_t upload_total,curl_off_t upload_done) {
+    (void)upload_total;(void)upload_done;Download *d=context;
+    if (d->progress) d->progress(d->context,AM_UPDATE_DOWNLOAD,
+        done>0 && done<=AM_DOWNLOAD_MAX_BYTES?(unsigned)done:0,
+        total>0 && total<=AM_DOWNLOAD_MAX_BYTES?(unsigned)total:0);
+    return 0;
+}
 static size_t download_bytes(void *data,size_t size,size_t count,void *context) {
     Download *d=context;
     if (size && count>SIZE_MAX/size) return 0;
@@ -134,9 +141,10 @@ static size_t download_bytes(void *data,size_t size,size_t count,void *context) 
     if (bytes>AM_DOWNLOAD_MAX_BYTES-d->used) return 0;
     size_t n=fwrite(data,1,bytes,d->file);d->used+=n;return n;
 }
-int am_update_download(const AmUpdate *release,const char *path,AmUpdate *out) {
-    Network n={0};Download d={0};CURL *h=NULL;int initialized=0,ret=-1;CURLcode code=CURLE_OK;long status=0;
+int am_update_download(const AmUpdate *release,const char *path,AmUpdate *out,AmUpdateProgressCallback progress,void *context) {
+    Network n={0};Download d={.progress=progress,.context=context};CURL *h=NULL;int initialized=0,ret=-1;CURLcode code=CURLE_OK;long status=0;
     memset(out,0,sizeof(*out));out->state=UPDATE_ERROR;
+    if (progress) progress(context,AM_UPDATE_DOWNLOAD,0,0);
     snprintf(out->stage,sizeof(out->stage),"Download release VPK");
     if (strncmp(release->asset_url,AM_RELEASE_DOWNLOAD_PREFIX,strlen(AM_RELEASE_DOWNLOAD_PREFIX)) || strlen(release->sha256)!=64 || !wifi(&n)) { snprintf(out->reason,sizeof(out->reason),"Wi-Fi or verified release asset unavailable.");goto done; }
     d.file=fopen(path,"wb");if (!d.file) { snprintf(out->reason,sizeof(out->reason),"Cannot create update file.");goto done; }
@@ -148,6 +156,7 @@ int am_update_download(const AmUpdate *release,const char *path,AmUpdate *out) {
     OPT(CURLOPT_USERAGENT,"PSVSD-AM/" ACCESSORY_VERSION);OPT(CURLOPT_CONNECTTIMEOUT,8L);OPT(CURLOPT_TIMEOUT,180L);
     OPT(CURLOPT_NOSIGNAL,1L);OPT(CURLOPT_SSLVERSION,(long)CURL_SSLVERSION_TLSv1_2);
     OPT(CURLOPT_CAINFO,"app0:update-ca-bundle.pem");OPT(CURLOPT_SSL_VERIFYPEER,1L);OPT(CURLOPT_SSL_VERIFYHOST,2L);
+    OPT(CURLOPT_NOPROGRESS,0L);OPT(CURLOPT_XFERINFOFUNCTION,download_progress);OPT(CURLOPT_XFERINFODATA,&d);
     OPT(CURLOPT_ERRORBUFFER,n.reason);OPT(CURLOPT_WRITEFUNCTION,download_bytes);OPT(CURLOPT_WRITEDATA,&d);
 #undef OPT
     code=curl_easy_perform(h);curl_easy_getinfo(h,CURLINFO_RESPONSE_CODE,&status);
@@ -157,8 +166,12 @@ int am_update_download(const AmUpdate *release,const char *path,AmUpdate *out) {
     snprintf(out->stage,sizeof(out->stage),"Verify release SHA-256");
     FILE *file=fopen(path,"rb");if (!file) goto done;
     mbedtls_sha256_context sha;mbedtls_sha256_init(&sha);int hash=mbedtls_sha256_starts(&sha,0);
-    unsigned char buffer[16384],digest[32]={0};size_t bytes;
-    while (hash==0 && (bytes=fread(buffer,1,sizeof(buffer),file))>0) hash=mbedtls_sha256_update(&sha,buffer,bytes);
+    unsigned char buffer[16384],digest[32]={0};size_t bytes,verified=0;
+    if (progress) progress(context,AM_UPDATE_VERIFY,0,(unsigned)d.used);
+    while (hash==0 && (bytes=fread(buffer,1,sizeof(buffer),file))>0) {
+        hash=mbedtls_sha256_update(&sha,buffer,bytes);verified+=bytes;
+        if (progress) progress(context,AM_UPDATE_VERIFY,(unsigned)verified,(unsigned)d.used);
+    }
     if (ferror(file)) hash=-1;
     fclose(file);if (hash==0) hash=mbedtls_sha256_finish(&sha,digest);mbedtls_sha256_free(&sha);
     char hex[65];for (unsigned i=0;i<32;++i) snprintf(hex+i*2,3,"%02x",digest[i]);

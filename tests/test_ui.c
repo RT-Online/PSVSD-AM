@@ -96,6 +96,23 @@ int main(int argc,char **argv) {
     am_ui_input(&m,AM_CROSS);am_ui_input(&m,AM_LEFT);
     assert(am_ui_input(&m,AM_CROSS)==ACTION_INSTALL_UPDATE && !m.update_confirm);
     am_ui_input(&m,AM_CROSS);assert(am_ui_input(&m,AM_CIRCLE)==ACTION_NONE && !m.update_confirm);
+    m.update_confirm=0;m.update.state=UPDATE_INSTALLING;m.busy=1;
+    for (unsigned phase=AM_UPDATE_DOWNLOAD;phase<=AM_UPDATE_INSTALL_ERROR;++phase) {
+        m.update_progress=(AmUpdateProgress){phase,512*1024,1024*1024};m.update_animation=79;
+        am_ui_render(buffer.pixels,&m);
+    }
+    m.update_progress=(AmUpdateProgress){AM_UPDATE_DOWNLOAD,512*1024,1024*1024};
+    am_ui_render(buffer.pixels,&m);if (argc>1) dump(argv[1],"UpdateDownloadProgress");
+    m.update_progress=(AmUpdateProgress){AM_UPDATE_DOWNLOAD,512*1024,0};
+    am_ui_render(buffer.pixels,&m);if (argc>1) dump(argv[1],"UpdateUnknownSize");
+    m.update_progress=(AmUpdateProgress){AM_UPDATE_EXTRACT,7,12};
+    am_ui_render(buffer.pixels,&m);if (argc>1) dump(argv[1],"UpdateExtractProgress");
+    m.update_progress=(AmUpdateProgress){AM_UPDATE_SYSTEM_INSTALL,0,0};
+    am_ui_render(buffer.pixels,&m);if (argc>1) dump(argv[1],"InstallerSharedUI");
+    m.update_progress=(AmUpdateProgress){AM_UPDATE_COMPLETE,1,1};
+    am_ui_render(buffer.pixels,&m);if (argc>1) dump(argv[1],"InstallerComplete");
+    m.update_progress=(AmUpdateProgress){AM_UPDATE_VERIFY,0xffffffffu,1};am_ui_render(buffer.pixels,&m);
+    for (unsigned i=0;i<16;++i) assert(buffer.before[i]==0xDEADBEEF && buffer.after[i]==0xDEADBEEF);
     puts("ui: menu/log pages, render bounds, save choices, Circle/clear confirmation and busy copy/verification views passed");
     return 0;
 }

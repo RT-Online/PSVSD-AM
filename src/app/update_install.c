@@ -52,8 +52,11 @@ static int safe_name(const char *name) {
     }
     return 1;
 }
-static int extract(void) {
+static int extract(AmUpdateProgressCallback progress,void *context) {
     unzFile zip=unzOpen(AM_UPDATE_VPK);if (!zip) return -1;
+    unz_global_info info_total;
+    if (unzGetGlobalInfo(zip,&info_total)!=UNZ_OK || !info_total.number_entry || info_total.number_entry>512) { unzClose(zip);return -1; }
+    if (progress) progress(context,AM_UPDATE_EXTRACT,0,(unsigned)info_total.number_entry);
     int ret=-1,next=UNZ_OK;uint64_t total=0;unsigned entries=0;
     if (unzGoToFirstFile(zip)!=UNZ_OK) goto done;
     do {
@@ -64,7 +67,7 @@ static int extract(void) {
             ((info.external_fa>>16)&0170000)==0120000 || info.uncompressed_size>32u*1024u*1024u) goto done;
         total+=info.uncompressed_size;if (total>96u*1024u*1024u) goto done;
         if (snprintf(path,sizeof(path),"%s/%s",AM_UPDATE_STAGE,name)>=(int)sizeof(path) || parents(path)<0) goto done;
-        if (name[strlen(name)-1]=='/') { sceIoMkdir(path,0777);continue; }
+        if (name[strlen(name)-1]=='/') { sceIoMkdir(path,0777);if (progress) progress(context,AM_UPDATE_EXTRACT,entries,(unsigned)info_total.number_entry);continue; }
         /* Exclusive create rejects duplicate/overlapping archive entries. */
         int fd=sceIoOpen(path,SCE_O_WRONLY|SCE_O_CREAT|SCE_O_EXCL,0777);if (fd<0) goto done;
         if (unzOpenCurrentFile(zip)!=UNZ_OK) { sceIoClose(fd);goto done; }
@@ -76,12 +79,13 @@ static int extract(void) {
         if (sceIoClose(fd)<0) ok=0;
         if (unzCloseCurrentFile(zip)!=UNZ_OK) ok=0; /* Includes CRC validation. */
         if (!ok) goto done;
+        if (progress) progress(context,AM_UPDATE_EXTRACT,entries,(unsigned)info_total.number_entry);
     } while ((next=unzGoToNextFile(zip))==UNZ_OK);
     ret=next==UNZ_END_OF_LIST_OF_FILE?0:-1;
 done:
     unzClose(zip);return ret;
 }
-int am_update_prepare(const char *version,char *reason,unsigned cap) {
+int am_update_prepare(const char *version,char *reason,unsigned cap,AmUpdateProgressCallback progress,void *context) {
     remove(AM_UPDATE_ROOT "/ready");
     if (clean(AM_UPDATE_STAGE,0)<0 || clean(AM_UPDATE_HELPER,0)<0) goto bad;
     sceIoMkdir(AM_UPDATE_ROOT,0777);sceIoMkdir(AM_UPDATE_STAGE,0777);
@@ -89,7 +93,8 @@ int am_update_prepare(const char *version,char *reason,unsigned cap) {
     unsigned major,minor,patch;char tail,expected[8];
     if (sscanf(v,"%u.%u.%u%c",&major,&minor,&patch,&tail)!=3 || major>99 || minor>9 || patch>9) goto bad;
     snprintf(expected,sizeof(expected),"%02u.%02u",major,minor*10+patch);
-    if (extract()<0 || am_package_validate(AM_UPDATE_STAGE,expected)<0) goto bad;
+    if (extract(progress,context)<0 || am_package_validate(AM_UPDATE_STAGE,expected)<0) goto bad;
+    if (progress) progress(context,AM_UPDATE_PREPARE,0,0);
     if (copy("app0:main-head.bin",AM_UPDATE_STAGE "/sce_sys/package/head.bin")<0 ||
         copy("app0:installer/eboot.bin",AM_UPDATE_HELPER "/eboot.bin")<0 ||
         copy("app0:installer/param.sfo",AM_UPDATE_HELPER "/sce_sys/param.sfo")<0 ||

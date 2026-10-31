@@ -19,14 +19,20 @@ int sceIoWrite(int fd,const void *p,int n) { return (int)write(fd,p,n); }
 int sceIoClose(int fd) { return close(fd); }
 int sceAppMgrLaunchAppByUri(int flags,const char *uri) { (void)flags;(void)uri;return 0; }
 static int promoted;
+static unsigned progress_events,last_phase,last_done,last_total;
+static void progress(void *context,unsigned phase,unsigned done,unsigned total) {
+    (void)context;assert(phase<=AM_UPDATE_PREPARE);assert(!total || done<=total);
+    if (progress_events && last_phase==phase) assert(done>=last_done);
+    ++progress_events;last_phase=phase;last_done=done;last_total=total;
+}
 int am_package_promote(const char *path) { assert(!strcmp(path,AM_UPDATE_HELPER));++promoted;return 0; }
 int main(int argc,char **argv) {
     assert(argc==3);assert(chdir(argv[1])==0);
     char source[1024];snprintf(source,sizeof(source),"%s/%s.vpk",argv[1],argv[2]);
     FILE *in=fopen(source,"rb"),*out=fopen(AM_UPDATE_VPK,"wb");assert(in && out);char b[8192];size_t n;
     while ((n=fread(b,1,sizeof(b),in))) assert(fwrite(b,1,n,out)==n);
-    fclose(in);fclose(out);char reason[192];int result=am_update_prepare("v.1.1.0",reason,sizeof(reason));
-    if (!strcmp(argv[2],"good")) { assert(result==0 && promoted==1);assert(am_package_validate(AM_UPDATE_STAGE,"01.10")==0);assert(am_package_validate(AM_UPDATE_STAGE,"01.11")<0); }
+    fclose(in);fclose(out);char reason[192];int result=am_update_prepare("v.1.1.0",reason,sizeof(reason),progress,NULL);
+    if (!strcmp(argv[2],"good")) { assert(result==0 && promoted==1);assert(progress_events>=4 && last_phase==AM_UPDATE_PREPARE && !last_total);assert(am_package_validate(AM_UPDATE_STAGE,"01.10")==0);assert(am_package_validate(AM_UPDATE_STAGE,"01.11")<0); }
     else { assert(result<0 && promoted==0);assert(access(AM_UPDATE_ROOT "/ready",F_OK)<0); }
     assert(access("escape",F_OK)<0);
     printf("Package staging: %s passed\n",argv[2]);return 0;

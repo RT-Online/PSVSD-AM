@@ -20,6 +20,16 @@ static int update_thread=-1;
 static unsigned update_done;
 static int update_quiet,update_installing;
 static AmUpdate install_release;
+static unsigned progress_sequence,progress_phase,progress_done,progress_total;
+/* Worker publishes scalar atomics; only the main thread touches the UI model. */
+static void update_progress(void *context,unsigned phase,unsigned done,unsigned total) {
+    (void)context;
+    __atomic_add_fetch(&progress_sequence,1,__ATOMIC_SEQ_CST);
+    __atomic_store_n(&progress_phase,phase,__ATOMIC_SEQ_CST);
+    __atomic_store_n(&progress_done,done,__ATOMIC_SEQ_CST);
+    __atomic_store_n(&progress_total,total,__ATOMIC_SEQ_CST);
+    __atomic_add_fetch(&progress_sequence,1,__ATOMIC_SEQ_CST);
+}
 static uint64_t last_update_check;
 
 static AccessorySession session;
@@ -31,6 +41,14 @@ static AmTouchBounds touch_bounds;
 static SceTouchSamplingState previous_touch_state;
 static int previous_touch_valid,front_sampling_started;
 
+static void poll_update_progress(void) {
+    unsigned first=__atomic_load_n(&progress_sequence,__ATOMIC_SEQ_CST);
+    if (first&1) return;
+    AmUpdateProgress value={__atomic_load_n(&progress_phase,__ATOMIC_SEQ_CST),
+        __atomic_load_n(&progress_done,__ATOMIC_SEQ_CST),__atomic_load_n(&progress_total,__ATOMIC_SEQ_CST)};
+    if (first!=__atomic_load_n(&progress_sequence,__ATOMIC_SEQ_CST)) return;
+    if (memcmp(&model.update_progress,&value,sizeof(value))) { model.update_progress=value;redraw=1; }
+}
 static void draw(void) {
     unsigned next=front^1u;am_ui_render(framebuffers[next],&model);
     SceDisplayFrameBuf f={sizeof(f),framebuffers[next],960,SCE_DISPLAY_PIXELFORMAT_A8B8G8R8,960,544};
@@ -138,9 +156,9 @@ finish:
 static int update_worker(SceSize argc,void *args) {
     (void)argc;(void)args;
     if (update_installing) {
-        if (am_update_download(&install_release,AM_UPDATE_VPK,&update_result)==0) {
+        if (am_update_download(&install_release,AM_UPDATE_VPK,&update_result,update_progress,NULL)==0) {
             snprintf(update_result.stage,sizeof(update_result.stage),"Stage verified VPK / installer");
-            if (am_update_prepare(install_release.version,update_result.reason,sizeof(update_result.reason))==0)
+            if (am_update_prepare(install_release.version,update_result.reason,sizeof(update_result.reason),update_progress,NULL)==0)
                 update_result.state=UPDATE_READY;
         }
     } else am_update_check(&update_result);
@@ -203,6 +221,7 @@ static void install_update(void) {
     if (model.dirty) { snprintf(model.message,sizeof(model.message),"Save or discard pending mount changes before updating.");return; }
     if (model.update.state!=UPDATE_AVAILABLE || !model.update.asset_url[0]) return;
     sceIoMkdir(AM_UPDATE_ROOT,0777);
+    update_progress(NULL,AM_UPDATE_DOWNLOAD,0,0);model.update_progress=(AmUpdateProgress){AM_UPDATE_DOWNLOAD,0,0};
     install_release=model.update;update_installing=1;update_quiet=0;model.busy=1;model.update.state=UPDATE_INSTALLING;
     snprintf(model.update.message,sizeof(model.update.message),"Downloading and verifying update... Please wait.");
     model.message[0]=0;__atomic_store_n(&update_done,0,__ATOMIC_RELAXED);draw();
@@ -250,6 +269,7 @@ int main(void) {
     check_updates(1);
     unsigned previous=0,ticks=0;int exiting=0;
     while (!exiting) {
+        if (update_installing) { poll_update_progress();model.update_animation=(model.update_animation+1)%1000;if (model.update_animation%5==0) redraw=1; }
         finish_update_check();
         if (redraw) draw();
         SceCtrlData pad;memset(&pad,0,sizeof(pad));sceCtrlPeekBufferPositive(0,&pad,1);

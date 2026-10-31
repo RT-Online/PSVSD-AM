@@ -87,11 +87,36 @@ unsigned am_ui_update_pages(const char *s) {
     while (*s) { char line[256];s=wrap_line(s,line,sizeof(line),600,0);++rows; }
     return rows?(rows+AM_UPDATE_ROWS-1)/AM_UPDATE_ROWS:1;
 }
+static void update_progress_view(const AmUi *m) {
+    const AmUpdateProgress *p=&m->update_progress;
+    const char *phase=p->phase==AM_UPDATE_VERIFY?"Verifying download":p->phase==AM_UPDATE_EXTRACT?"Extracting update":
+        p->phase==AM_UPDATE_PREPARE?"Preparing installer":p->phase==AM_UPDATE_SYSTEM_INSTALL?"Installing update":
+        p->phase==AM_UPDATE_COMPLETE?"Update installed":p->phase==AM_UPDATE_INSTALL_ERROR?"Installation failed":"Downloading update";
+    round_rect(270,205,640,257,12,CARD);text(290,224,1,ACCENT,phase);
+    unsigned done=p->total && p->done>p->total?p->total:p->done;
+    char detail[160];
+    if (p->total) {
+        unsigned percent=(unsigned)((uint64_t)done*100/p->total);
+        snprintf(detail,sizeof(detail),"%u%%",percent);text(884-width(detail,2),220,2,TEXT,detail);
+        if (p->phase==AM_UPDATE_COMPLETE) snprintf(detail,sizeof(detail),"Reopening PSVSD/AM...");
+        else if (p->phase==AM_UPDATE_EXTRACT) snprintf(detail,sizeof(detail),"Files: %u / %u",done,p->total);
+        else snprintf(detail,sizeof(detail),"%.2f / %.2f MiB",done/1048576.0,p->total/1048576.0);
+    } else if (p->phase==AM_UPDATE_INSTALL_ERROR) snprintf(detail,sizeof(detail),"Error: %08X",(unsigned)m->update.error);
+    else if (p->phase==AM_UPDATE_DOWNLOAD) snprintf(detail,sizeof(detail),"%.2f MiB received - waiting for total size",done/1048576.0);
+    else snprintf(detail,sizeof(detail),"Please wait...");
+    text(290,295,0,TEXT,detail);
+    wrapped(290,338,p->phase==AM_UPDATE_INSTALL_ERROR?"Press X to return to PSVSD/AM. Details are saved in the update log.":
+        "Keep the system powered on.\nPSVSD/AM will reopen when finished.",594,3,0,MUTED);
+    round_rect(290,420,594,12,5,BORDER);
+    if (p->total) round_rect(290,420,(int)((uint64_t)594*done/p->total),12,5,ACCENT);
+    else if (p->phase!=AM_UPDATE_INSTALL_ERROR) round_rect(290+(int)(m->update_animation%80)*6,420,114,12,5,ACCENT);
+}
 static void updates_view(const AmUi *m) {
     title("Updates","Official releases from RT-Online/PSVSD-AM");
     char action[64];snprintf(action,sizeof(action),"Update to %s",m->update.version);
     button(AM_UPDATE_X,AM_UPDATE_Y,AM_UPDATE_W,AM_UPDATE_H,
-        m->update.state==UPDATE_AVAILABLE && m->update.asset_url[0]?action:"Check for Updates",!m->busy && m->update.state!=UPDATE_CHECKING);
+        m->update.state==UPDATE_INSTALLING?"Updating...":m->update.state==UPDATE_AVAILABLE && m->update.asset_url[0]?action:"Check for Updates",!m->busy && m->update.state!=UPDATE_CHECKING);
+    if (m->update.state==UPDATE_INSTALLING) { update_progress_view(m);return; }
     round_rect(270,205,640,257,12,CARD);
     const AmUpdate *u=&m->update;
     const char *state=u->state==UPDATE_UNCHECKED?"Check for a newer public release.":

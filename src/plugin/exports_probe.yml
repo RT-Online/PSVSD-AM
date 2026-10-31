@@ -2,7 +2,7 @@ PSVSDAMProbe:
   attributes: 0
   version:
     major: 1
-    minor: 11
+    minor: 12
   main:
     start: module_start
     stop: module_stop
