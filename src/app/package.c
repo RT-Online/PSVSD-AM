@@ -18,7 +18,7 @@ static int promote(const char *path,int remove) {
     }
     ret=scePromoterUtilityInit();if (ret<0) goto done;initialized=1;
     ret=remove?scePromoterUtilityDeletePkg(path):scePromoterUtilityPromotePkgWithRif(path,1);
-    if (ret>=0) { int promoted=0;ret=scePromoterUtilityGetResult(&promoted);if (ret>=0) ret=promoted; }
+    if (ret>=0 && !remove) { int promoted=0;ret=scePromoterUtilityGetResult(&promoted);if (ret>=0) ret=promoted; }
 done:
     if (initialized) scePromoterUtilityExit();
     if (module) sceSysmoduleUnloadModuleInternal(SCE_SYSMODULE_INTERNAL_PROMOTER_UTIL);

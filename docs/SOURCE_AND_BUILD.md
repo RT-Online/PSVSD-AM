@@ -1,3 +1,15 @@
+# Current maintenance release 1.1.4 — installer cleanup
+
+Bumped app/package/module metadata and artwork to 1.1.4 / APP_VER 01.14. The main
+app discovers a leftover RTPSVUPD1 installation on startup, including leftovers
+whose result marker was deleted by an older release. Removal is delayed and
+retried, paused while busy, and failures are logged for another launch. A result
+marker is retained until successful cleanup (or helper files are already absent).
+DeletePkg is treated separately from package promotion: its success is not
+replaced by an unrelated GetResult call. Cleanup timing is unit tested through
+an injected removal callback. Existing reverse-copy and progress behavior remains.
+Real Vita cleanup testing is required; the timing cause remains an inference.
+
 # Current 1.1.3 reverse-storage preparation revision
 
 Explicitly retains version 1.1.3. One shared folder-copy implementation handles

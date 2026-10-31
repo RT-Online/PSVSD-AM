@@ -2,6 +2,7 @@
 #ifndef PSVSD_AM_UPDATES_H
 #define PSVSD_AM_UPDATES_H
 #include <stddef.h>
+#include <stdint.h>
 #define AM_RELEASE_API "https://api.github.com/repos/RT-Online/PSVSD-AM/releases/latest"
 #define AM_RELEASE_DOWNLOAD_PREFIX "https://github.com/RT-Online/PSVSD-AM/releases/download/"
 #define AM_DOWNLOAD_MAX_BYTES (64u*1024u*1024u)
@@ -27,6 +28,9 @@ typedef struct {
     int (*wifi)(void *ctx);
     int (*get)(void *ctx,char *body,size_t cap,size_t *used,int *http_status);
 } AmUpdateTransport;
+/* Retry temporary installer removal after it has had time to exit. */
+typedef struct { int pending,last_error;unsigned attempts;uint64_t next_try; } AmUpdateCleanup;
+int am_update_cleanup_tick(AmUpdateCleanup *state,uint64_t now,int busy,int (*remove_helper)(void *),void *context);
 int am_update_parse(const char *json,size_t size,const char *current,AmUpdate *out);
 void am_update_check_with_transport(AmUpdate *out,const char *current,const AmUpdateTransport *transport);
 void am_update_check(AmUpdate *out);

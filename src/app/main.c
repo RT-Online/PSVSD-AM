@@ -20,6 +20,7 @@ static int update_thread=-1;
 static unsigned update_done;
 static int update_quiet,update_installing;
 static AmUpdate install_release;
+static AmUpdateCleanup installer_cleanup;
 static unsigned progress_sequence,progress_phase,progress_done,progress_total;
 /* Worker publishes scalar atomics; only the main thread touches the UI model. */
 static void update_progress(void *context,unsigned phase,unsigned done,unsigned total) {
@@ -245,6 +246,16 @@ static void install_update(void) {
         snprintf(model.message,sizeof(model.message),"Could not start installer: %08X",(unsigned)ret);
     }
 }
+static int remove_installer(void *context) { (void)context;return am_package_remove_helper(); }
+static void cleanup_installer(void) {
+    int ret=am_update_cleanup_tick(&installer_cleanup,sceKernelGetProcessTimeWide(),
+        model.busy || update_thread>=0,remove_installer,NULL);
+    if (ret==1) {
+        remove(AM_UPDATE_ROOT "/result");am_log("Temporary installer removed.\n");
+    } else if (ret<0) {
+        am_log("Temporary installer cleanup deferred: %08X. Will retry next launch.\n",(unsigned)installer_cleanup.last_error);
+    }
+}
 static int init_display(void) {
     SceUID block=sceKernelAllocMemBlock("PSVSDAMDisplay",SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW,4*1024*1024,NULL);
     if (block<0) return block;
@@ -272,17 +283,21 @@ int main(void) {
            (unsigned)touch_start,(unsigned)touch_info,panel.minDispX,panel.minDispY,panel.maxDispX,panel.maxDispY,model.touch_available);
     FILE *installed=fopen(AM_UPDATE_ROOT "/result","rb");
     if (installed) {
-        char result[16]={0};fread(result,1,8,installed);fclose(installed);remove(AM_UPDATE_ROOT "/result");
+        char result[16]={0};fread(result,1,8,installed);fclose(installed);
         am_log("Installer result: %s\n",result);
         if (!strcmp(result,"00000000")) snprintf(model.message,sizeof(model.message),"Update installed. Saved mount settings retained.");
         else snprintf(model.message,sizeof(model.message),"Update installation failed (%s). See Log.",result);
-        am_package_remove_helper();
     }
+    SceIoStat helper_stat;
+    if (sceIoGetstat("ux0:app/RTPSVUPD1/eboot.bin",&helper_stat)>=0) {
+        installer_cleanup.pending=1;installer_cleanup.next_try=sceKernelGetProcessTimeWide()+2000000u;
+    } else remove(AM_UPDATE_ROOT "/result");
     check_updates(1);
     unsigned previous=0,ticks=0;int exiting=0;
     while (!exiting) {
         if (update_installing) { poll_update_progress();model.update_animation=(model.update_animation+1)%1000;if (model.update_animation%5==0) redraw=1; }
         finish_update_check();
+        cleanup_installer();
         if (redraw) draw();
         SceCtrlData pad;memset(&pad,0,sizeof(pad));sceCtrlPeekBufferPositive(0,&pad,1);
         unsigned pressed=pad.buttons&~previous;previous=pad.buttons;

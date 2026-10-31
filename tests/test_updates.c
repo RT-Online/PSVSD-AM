@@ -3,7 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../src/app/updates.h"
-static int cases;
+static int cases,cleanup_calls,cleanup_failures;
+static int remove_helper(void *context) { (void)context;++cleanup_calls;return cleanup_calls<=cleanup_failures?-55:0; }
 static const char *release="{\"tag_name\":\"v1.0.2\",\"draft\":false,\"prerelease\":false,\"body\":\"Notes\\n- Fixed copy\",\"assets\":[{\"tag_name\":\"v9.0.0\"}]}";
 static struct { int connected,calls,status,fail,too_large;const char *json; } mock;
 static int wifi(void *p) { (void)p;return mock.connected; }
@@ -94,6 +95,18 @@ int main(int argc,char **argv) {
     assert(am_update_parse(unsafe,strlen(unsafe),"1.1.0",&out)==0 && !out.asset_url[0]);++cases;
     snprintf(unsafe,sizeof(unsafe),"%s",asset);char *sha=strstr(unsafe,"sha256:");assert(sha);sha[7]='z';
     assert(am_update_parse(unsafe,strlen(unsafe),"1.1.0",&out)==0 && !out.asset_url[0]);++cases;
+    AmUpdateCleanup cleanup={.pending=1,.next_try=2000000};cleanup_calls=0;cleanup_failures=2;
+    assert(am_update_cleanup_tick(&cleanup,0,0,remove_helper,NULL)==0 && !cleanup_calls);++cases;
+    assert(am_update_cleanup_tick(&cleanup,2000000,1,remove_helper,NULL)==0 && !cleanup_calls);++cases;
+    assert(am_update_cleanup_tick(&cleanup,2000000,0,remove_helper,NULL)==0 && cleanup.pending && cleanup.attempts==1);++cases;
+    assert(am_update_cleanup_tick(&cleanup,2000001,0,remove_helper,NULL)==0 && cleanup_calls==1);++cases;
+    assert(am_update_cleanup_tick(&cleanup,4000000,0,remove_helper,NULL)==0 && cleanup_calls==2);++cases;
+    assert(am_update_cleanup_tick(&cleanup,6000000,0,remove_helper,NULL)==1 && !cleanup.pending && cleanup_calls==3);++cases;
+    assert(am_update_cleanup_tick(&cleanup,8000000,0,remove_helper,NULL)==0 && cleanup_calls==3);++cases;
+    cleanup=(AmUpdateCleanup){.pending=1};cleanup_calls=0;cleanup_failures=100;
+    for (unsigned i=0;i<8;++i) assert(am_update_cleanup_tick(&cleanup,(uint64_t)i*2000000,0,remove_helper,NULL)==(i==7?-1:0));
+    assert(!cleanup.pending && cleanup_calls==8 && cleanup.last_error==-55);++cases;
+    parse("v1.1.4","1.1.4",UPDATE_CURRENT);parse("v1.1.4","1.1.3",UPDATE_AVAILABLE);
     if (argc>1) {
         FILE *file=fopen(argv[1],"rb");assert(file);char *json=malloc(AM_RELEASE_MAX_BYTES+1);assert(json);
         size_t used=fread(json,1,AM_RELEASE_MAX_BYTES,file);assert(!ferror(file));fclose(file);
