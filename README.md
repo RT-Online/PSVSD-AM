@@ -4,7 +4,7 @@
 
 AI tools assisted with code development, documentation, and testing. RefurbedTech directed development and performed hardware testing.
 
-Version **1.2.0** · Vita title ID **RTPSV0001** · Package version **01.20**
+Version **1.2.1** · Vita title ID **RTPSV0001** · Package version **01.21**
 
 ## Features
 
@@ -69,7 +69,7 @@ The three kernel payloads are intentional: `psvsd_am.skprx` is the boot plugin, 
 
 ## Validation and license
 
-Host checks: `sh tests/run_tests.sh`. These exercise control flow with mocked Vita APIs; they cannot prove hardware behavior, private firmware offsets or power-loss recovery. Original hardware reports confirmed secondary file transfers/standby recovery and primary mounting. Version 1.2.0 has passed the host suite, a native VitaSDK build and static import checks; console testing is pending.
+Host checks: `sh tests/run_tests.sh`. These exercise control flow with mocked Vita APIs; they cannot prove hardware behavior, private firmware offsets or power-loss recovery. Original hardware reports confirmed secondary file transfers/standby recovery and primary mounting. Version 1.2.1 has passed the host suite, a native VitaSDK build and static import checks; console testing is pending.
 
 GPL-3.0-or-later; see [COPYING](COPYING) and [third-party notices](docs/THIRD_PARTY_NOTICES.md). Derived from USBMC by Yifan Lu and VitaShell storage code by TheFloW. Font and taiHEN SDK components retain their own licenses.
 
@@ -114,7 +114,7 @@ AM_VERSION so installation validates the exact release tag and matching package.
 Version 1.1.6 and later select the helper from the verified download. However,
 installed versions through 1.1.8 still initiate that first handoff with the older
 URI call. If an old version stops at installer LiveArea, press Start once to
-finish, or install 1.2.0 manually with VitaShell. Only after the new main app is
+finish, or install 1.2.1 manually with VitaShell. Only after the new main app is
 running can its corrected installer-launch call be used. Same-version releases
 are not offered again.
 
@@ -158,33 +158,32 @@ are reported on screen. Offline skips remain silent.
 
 ### Bundled TLS — no iTLS-Enso requirement
 
-The current 1.2.0 build includes libcurl, Mbed TLS and a Mozilla CA bundle inside
+The current 1.2.1 build includes libcurl, Mbed TLS and a Mozilla CA bundle inside
 the VPK. Update checks no longer use the Vita's system HTTPS implementation.
 Users do not need to install iTLS-Enso or modify system certificates. TLS 1.2 or
 newer, certificate-chain validation and hostname verification remain required.
 The network feature still needs testing on the Vita; it does not change storage
 settings. If it fails, the Updates page includes a readable libcurl error reason.
 
-### Update handoffs (1.2.0)
+### Update handoffs (1.2.1)
 
-The installer exits immediately after its return launch request is accepted,
-releasing the previous application before the updated main app opens. A rejected
-request keeps the installer visible with a retry option. Startup receipts remain
-diagnostic only; the helper no longer waits for them. This change targets the
-close-previous-app prompt and still needs confirmation on Vita.
+The working main-to-installer title launch remains unchanged. The return path
+uses `_sceAppMgrLaunchAppByUri2` with LIVEAREA_OFF | EXIT_TO (0x50000), the
+installer's AppMgr application ID as parent, disabled callbacks and zeroed
+reserved fields. This explicitly identifies the departing application rather
+than queuing another generic title launch. A rejected lookup/launch stays on
+the installer retry screen; there is no generic-launch fallback.
 
-Both app-to-installer and installer-to-app now share one process-start function:
-`sceAppMgrLaunchAppByName(0x70000, title, NULL)`. The SDK's usual `0x60000` is
-combined with `LIVEAREA_OFF` (`0x10000`). There is no URI fallback that could be
-accepted while merely opening LiveArea. A negative launch result stays an error;
-it is not reported as a successful handoff. Target title, flags and result are
-logged for both directions. The confirmed framebuffer handling is unchanged.
+This is a hardware-test candidate for the close-previous-app prompt, not a
+confirmed firmware fix. The SDK describes EXIT_TO but does not guarantee prompt
+suppression. The installer display and promotion sequence are unchanged.
 
-The receipt still uses a per-attempt token and a 20-second expiry. It records
-elapsed time, rejects stale/backwards-clock requests and does not change the
-calendar date. A manual Start within that window cannot be distinguished from
-automatic launch by the receipt alone. Observe the actual transition when testing.
-Longer handoff logs are imported by line using the bounded log-tail reader.
+A bounded startup receipt is consumed once, expires after five minutes and
+rejects backwards ticks. It is diagnostic, not a helper-exit wait. After a valid
+return and initial UI setup, the main app attempts targeted helper deletion
+once. It refuses to delete an installer reported as running, and does not use
+DestroyApp or LiveArea refresh during this cleanup. Errors are logged and
+explicit Exit remains a fallback. Reboot has no new Shell operations.
 
 ### Save and Reboot after an update
 
@@ -198,8 +197,8 @@ reset API directly. It logs the returned code and displays an error if reset is
 rejected. Save failure still prevents reboot. No storage mapping logic changes.
 
 Actual LiveArea refresh and helper removal remain available on explicit Exit.
-The temporary helper bubble can remain through reboot until a later Exit. Startup
-and idle code do not perform that cleanup. This timing tradeoff keeps Shell calls
+The temporary helper bubble can remain through reboot until a later Exit. A valid update-return receipt permits the targeted cleanup above; ordinary
+startup and idle code do not perform package deletion. This timing tradeoff keeps Shell calls
 out of the foreground-dependent reboot sequence.
 
 ### Artwork and data folders

@@ -45,5 +45,6 @@ int am_update_relaunch_confirm(void) {
         if (f) { fprintf(f,"Startup receipt: token=%08X elapsed_us=%llu version=" ACCESSORY_VERSION "\n",
             (unsigned)token,(unsigned long long)(tick.tick-started));fclose(f); }
     }
+    if (ok) remove(REQUEST);
     return ok?1:-1;
 }

@@ -284,8 +284,8 @@ int main(void) {
     am_log("Data path migration: %08X\n",(unsigned)migrated);
     if (migrated<0) snprintf(model.message,sizeof(model.message),"Data migration incomplete. Existing files retained. See Log.");
     if (resumed>0) {
-        am_log("Updater startup receipt written within 20 seconds: PSVSD/AM " ACCESSORY_VERSION "\n");
-        am_log("Installer cleanup deferred until user Exit or Reboot.\n");
+        am_log("Updater startup receipt written within five minutes: PSVSD/AM " ACCESSORY_VERSION "\n");
+        am_log("Installer cleanup scheduled after initial app setup.\n");
     } else if (resumed<0) am_log("Updater startup receipt rejected or failed (expired/malformed request, clock or write error).\n");
     redraw=1;
     query_status();refresh_log();
@@ -321,6 +321,11 @@ int main(void) {
         am_log("Installer result: %s\n",result);
         if (!strcmp(result,"00000000")) snprintf(model.message,sizeof(model.message),artwork>0?"Update installed. Choose Reboot to refresh home-screen artwork.":"Update installed. Saved mount settings retained.");
         else snprintf(model.message,sizeof(model.message),"Update installation failed (%s). See Log.",result);
+    }
+    if (resumed>0) {
+        draw();
+        int cleanup=am_update_cleanup_return();
+        am_log("Installer return cleanup (1=still running): %08X\n",(unsigned)cleanup);
     }
     check_updates(1);
     unsigned previous=0,ticks=0;int exiting=0;

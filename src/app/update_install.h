@@ -10,7 +10,8 @@
 int am_update_prepare(const char *version,char *reason,unsigned cap,AmUpdateProgressCallback progress,void *context);
 int am_update_launch_installer(void);
 int am_update_launch_app(void);
-#define AM_RELAUNCH_WAIT_US 20000000u
+int am_update_cleanup_return(void);
+#define AM_RELAUNCH_WAIT_US 300000000u
 int am_update_relaunch_start(uint32_t token);
 int am_update_relaunch_confirm(void);
 void am_update_relaunch_cancel(void);
