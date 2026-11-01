@@ -1,0 +1,21 @@
+/* Explicit package staging and helper handoff. GPL-3.0-or-later. */
+#ifndef AM_UPDATE_INSTALL_H
+#define AM_UPDATE_INSTALL_H
+#include "updates.h"
+#include "../common/paths.h"
+#define AM_UPDATE_ROOT ACCESSORY_DATA_DIR "/update"
+#define AM_UPDATE_VPK AM_UPDATE_ROOT "/release.vpk"
+#define AM_UPDATE_STAGE AM_UPDATE_ROOT "/package"
+#define AM_UPDATE_HELPER AM_UPDATE_ROOT "/helper"
+int am_update_prepare(const char *version,char *reason,unsigned cap,AmUpdateProgressCallback progress,void *context);
+int am_update_launch_installer(void);
+int am_update_launch_app(void);
+#define AM_RELAUNCH_WAIT_US 20000000u
+int am_update_relaunch_start(uint32_t token);
+int am_update_relaunch_confirm(void);
+void am_update_relaunch_cancel(void);
+int am_package_remove_helper(void);
+int am_package_promote(const char *path);
+int am_package_release(const char *path,const char *semantic,char package[6]);
+int am_package_helper_release(const char *path,const char *semantic,const char *package);
+#endif

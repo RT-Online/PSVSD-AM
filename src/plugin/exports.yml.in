@@ -1,0 +1,13 @@
+PSVSDAMKernel:
+  attributes: 0
+  version:
+    major: @AM_MODULE_MAJOR@
+    minor: @AM_MODULE_MINOR@
+  main:
+    start: module_start
+    stop: module_stop
+  libraries:
+    PSVSDAMStorage:
+      syscall: false
+      functions:
+        - psvsdam_original_storage

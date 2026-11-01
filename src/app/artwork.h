@@ -1,0 +1,12 @@
+#ifndef AM_ARTWORK_H
+#define AM_ARTWORK_H
+/* Refresh this title's cached source artwork and LiveArea only.
+ * Does not rebuild the application database or alter bubble positions.
+ * Shell's rendered bubble cache may still require a system restart. */
+/* Read-only startup check; no system refresh, module load or cache writes. */
+int am_artwork_needs_refresh(void);
+/* Full LiveArea refresh: Exit only. Never call before requesting reboot. */
+int am_artwork_refresh(void);
+/* Prepare cache files before reboot without loading/notifying LiveArea. */
+int am_artwork_sync_files(void);
+#endif

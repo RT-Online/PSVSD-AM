@@ -1,0 +1,10 @@
+/build*/
+/bin/
+*.elf
+*.velf
+*.self
+*.skprx
+*.vpk
+__pycache__/
+*.py[cod]
+.DS_Store
