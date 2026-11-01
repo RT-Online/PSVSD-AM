@@ -97,6 +97,7 @@ void am_log(const char *fmt,...) {
 }
 int am_load_settings(AmSettings *s) {
     *s=(AmSettings){0,AM_UMA0};char text[256];int r=am_read_text(AM_SETTINGS_PATH,text,sizeof(text));
+    if (r==ENOENT_VALUE) r=am_read_text(AM_LEGACY_SETTINGS_PATH,text,sizeof(text));
     if (r==ENOENT_VALUE) return 0;
     return r<0?r:am_settings_parse(text,s);
 }

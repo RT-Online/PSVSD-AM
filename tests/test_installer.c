@@ -47,7 +47,8 @@ int sceCtrlPeekBufferPositive(int port,SceCtrlData *pad,int count) {
 uint32_t sceKernelGetProcessTimeLow(void) { return (uint32_t)now; }
 uint64_t sceKernelGetProcessTimeWide(void) { return now; }
 int sceKernelExitProcess(int status) { exit_status=status;longjmp(stop,1); }
-int am_package_validate(const char *path,const char *expected) { assert(!strcmp(path,AM_UPDATE_STAGE) && !strcmp(expected,"01.17"));return 0; }
+int am_migrate_update(void) { return 0; }
+int am_package_validate(const char *path,const char *expected) { assert(!strcmp(path,AM_UPDATE_STAGE) && !strcmp(expected,"01.18"));return 0; }
 int am_package_promote(const char *path) { assert(!strcmp(path,AM_UPDATE_STAGE));return promote_error; }
 int am_update_relaunch_start(uint32_t token) { assert(token);++submitted;return launch_error; }
 int am_update_relaunch_check(uint32_t token) { assert(token);++checks;return ack_after>0 && checks>=ack_after; }
@@ -56,11 +57,11 @@ static void reset(void) {
     scanned=queued=NULL;now=0;frames=submitted=checks=ack_after=launch_error=promote_error=0;
     pending=presented=display_error_logged=install_done=install_phase=0;
     flip_delay=1;flip_left=get_error=submit_error=render_count=0;install_result=-1;memset(&model,0,sizeof(model));failure[0]=0;
-    FILE *f=fopen(AM_UPDATE_ROOT "/ready","wb");assert(f);assert(fwrite("01.17",1,6,f)==6);fclose(f);
+    FILE *f=fopen(AM_UPDATE_ROOT "/ready","wb");assert(f);assert(fwrite("01.18",1,6,f)==6);fclose(f);
 }
 int main(void) {
     char root[]="/tmp/am-installer-XXXXXX";assert(mkdtemp(root));assert(chdir(root)==0);
-    assert(mkdir("ux0:data",0700)==0);assert(mkdir("ux0:data/PSVSD_Accessory",0700)==0);assert(mkdir(AM_UPDATE_ROOT,0700)==0);
+    assert(mkdir("ux0:data",0700)==0);assert(mkdir("ux0:data/PSVSD_AM",0700)==0);assert(mkdir(AM_UPDATE_ROOT,0700)==0);
     reset();assert(init_display()==0);for (unsigned i=0;i<120;++i) show(AM_UPDATE_SYSTEM_INSTALL,i);
     assert(frames==120 && now==240*16667u); /* Real renderer never touches scanout. */
     reset();assert(init_display()==0);flip_delay=4;

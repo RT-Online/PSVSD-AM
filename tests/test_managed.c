@@ -18,7 +18,7 @@ int main(void) {
     assert(module_start(0,NULL)==1 && !boot_starts && !loads);
     reset();cfg.config_text=uma;cfg.boot_start_fail=1;
     assert(module_start(0,NULL)==1 && deleted_threads==1 && !loads);
-    reset();cfg.config_text=ux;
+    reset();cfg.legacy_config=1;cfg.config_text=ux;
     assert(module_start(0,NULL)==0 && redirected && mount_ux0==1 && !mount_uma0);
     assert(resume_enabled);ux0_mounted=0;wake();assert(mount_ux0==2 && ux0_mounted);
     reset();cfg.config_text=ux;cfg.shell_live=1;

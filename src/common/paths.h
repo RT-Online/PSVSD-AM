@@ -1,12 +1,15 @@
 #ifndef ACCESSORY_PATHS_H
 #define ACCESSORY_PATHS_H
 #include <stdint.h>
-#define ACCESSORY_VERSION "1.1.7"
-#define ACCESSORY_DATA_DIR "ux0:data/PSVSD_Accessory"
+#define ACCESSORY_VERSION "1.1.8"
+#define ACCESSORY_DATA_DIR "ux0:data/PSVSD_AM"
+#define AM_LEGACY_DATA_DIR "ux0:data/PSVSD_Accessory"
+#define AM_LEGACY_KERNEL_DIR "ur0:data/PSVSD_Accessory"
+#define AM_LEGACY_SETTINGS_PATH AM_LEGACY_KERNEL_DIR "/settings.ini"
 #define ACCESSORY_USER_LOG ACCESSORY_DATA_DIR "/test.log"
 #define ACCESSORY_STAGED_PROBE ACCESSORY_DATA_DIR "/usbmc_accessory_probe.skprx"
 #define ACCESSORY_SOURCE_PROBE "app0:usbmc_accessory_probe.skprx"
-#define ACCESSORY_KERNEL_DIR "ur0:data/PSVSD_Accessory"
+#define ACCESSORY_KERNEL_DIR "ur0:data/PSVSD_AM"
 #define ACCESSORY_KERNEL_LOG ACCESSORY_KERNEL_DIR "/kernel.log"
 #define ACCESSORY_KERNEL_FALLBACK ACCESSORY_DATA_DIR "/kernel.log"
 #define ACCESSORY_ORIGINAL_MAGIC 0x50534F52u

@@ -2,7 +2,7 @@
 import struct, sys, zipfile
 from pathlib import Path
 root=Path(sys.argv[1]);root.mkdir(exist_ok=True)
-(root/'ux0:data/PSVSD_Accessory/update').mkdir(parents=True,exist_ok=True)
+(root/'ux0:data/PSVSD_AM/update').mkdir(parents=True,exist_ok=True)
 (root/'app0:installer').mkdir(exist_ok=True)
 for p in ['app0:main-head.bin','app0:installer/eboot.bin','app0:installer/param.sfo','app0:installer/head.bin']:(root/p).write_bytes(b'fixture')
 (root/'app0:sce_sys').mkdir(exist_ok=True);(root/'app0:sce_sys/icon0.png').write_bytes(b'fixture')

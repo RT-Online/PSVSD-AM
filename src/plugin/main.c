@@ -1,5 +1,5 @@
 /*
- * PSVSD/AM 1.1.7 - PCH-1000 accessory-port storage.
+ * PSVSD/AM 1.1.8 - PCH-1000 accessory-port storage.
  * Derived from USBMC / VitaShell, Copyright (C) 2015-2017 TheFloW.
  * USBMC integration by Yifan Lu; accessory adaptation for RefurbedTech, 2026.
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -564,6 +564,7 @@ static int initialize_runtime(SceSize argc, void *args) {
     log_line("Request: %08X\nPrimary log open: %08X\n",(unsigned)request_id,(unsigned)primary_log_result);
     if (USBMC_MANAGED_BOOT) {
         char config[256];int fd=ksceIoOpen(AM_SETTINGS_PATH,SCE_O_RDONLY,0),n=-1;
+        if (fd==(int)0x80010002) fd=ksceIoOpen(AM_LEGACY_SETTINGS_PATH,SCE_O_RDONLY,0);
         if (fd>=0) { n=ksceIoRead(fd,config,sizeof(config)-1);ksceIoClose(fd); }
         AmSettings settings={0,AM_UMA0};
         if (n<0) {
@@ -680,6 +681,7 @@ int module_start(SceSize argc, void *args) {
     if (USBMC_MANAGED_BOOT) {
         char text[256];AmSettings s={0,AM_UMA0};
         int fd=ksceIoOpen(AM_SETTINGS_PATH,SCE_O_RDONLY,0),n=-1;
+        if (fd==(int)0x80010002) fd=ksceIoOpen(AM_LEGACY_SETTINGS_PATH,SCE_O_RDONLY,0);
         if (fd>=0) { n=ksceIoRead(fd,text,sizeof(text)-1);ksceIoClose(fd); }
         if (n>=0) text[n]=0;
         if (n>=0 && n<(int)sizeof(text)-1 && am_settings_parse(text,&s)>=0 && s.enabled && s.target==AM_UMA0) {

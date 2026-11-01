@@ -3,6 +3,9 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <stdint.h>
+typedef struct { uint64_t tick; } SceRtcTick;
+int sceRtcGetCurrentTick(SceRtcTick *tick);
 #define SCE_O_WRONLY O_WRONLY
 #define SCE_O_CREAT O_CREAT
 #define SCE_O_EXCL O_EXCL
@@ -17,6 +20,6 @@ int sceIoRemove(const char *p);
 int sceIoOpen(const char *p,int flags,int mode);
 int sceIoWrite(int fd,const void *p,int n);
 int sceIoClose(int fd);
-int sceAppMgrLaunchAppByName2(const char *name,const char *param,void *opt);
+int sceAppMgrLaunchAppByName(int flags,const char *name,const char *param);
 int sceAppMgrLaunchAppByUri(int flags,const char *uri);
 #endif

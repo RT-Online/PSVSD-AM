@@ -190,6 +190,11 @@ static int request_original_cb(void *ctx,char *message,size_t cap) {
 int main(void) {
     AmSettings s;AmTestResult r;AmStatus status;char message[192],out[65536],other[65536];
     reset();assert(am_load_settings(&s)==0 && !s.enabled && s.target==AM_UMA0);
+    reset();assert(sceIoMkdir(AM_LEGACY_KERNEL_DIR,0777)>=0);
+    put(AM_LEGACY_SETTINGS_PATH,"version=1\nenabled=1\nmount=uma0\n");
+    assert(am_load_settings(&s)==0 && s.enabled && s.target==AM_UMA0);
+    put(AM_SETTINGS_PATH,"version=1\nenabled=0\nmount=ux0\n");
+    assert(am_load_settings(&s)==0 && !s.enabled && s.target==AM_UX0);
     reset();put(AM_SETTINGS_PATH,"invalid");assert(am_load_settings(&s)<0 && !s.enabled);
     reset();s=(AmSettings){1,AM_UMA0};assert(am_save_settings(&s,message,sizeof(message))==0);
     assert(am_load_settings(&s)==0 && s.enabled && s.target==AM_UMA0);

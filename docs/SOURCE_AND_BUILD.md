@@ -1,4 +1,44 @@
-# Current maintenance release 1.1.7 — preserve focus after updater return
+# Current maintenance release 1.1.8 — explicit process launch and consistent data paths
+
+APP_VER 01.18; kernel major 1/minor 18. Both title IDs are unchanged.
+The user confirmed 1.1.7's display is fixed but return stops at LiveArea Start.
+The provided log records Name2 acceptance and a later main-app receipt; manual
+Start means that receipt does not establish automatic startup.
+
+`launch.c` now calls sceAppMgrLaunchAppByName with 0x70000. This combines the
+SDK's usual 0x60000 with LIVEAREA_OFF 0x10000. The return API and selected flags
+are logged before/after submission; negative results retain URI fallback.
+The main app still renders and writes its receipt early, then performs migration.
+RTC-based receipts expire after 20 seconds, reject a backwards tick and record
+elapsed microseconds. No clock is changed and no correct calendar date is assumed.
+Receipt timing cannot identify manual intervention inside that window.
+
+`migration.c` copies only known legacy settings/log/artwork files if destinations
+are absent, verifies each temporary copy and preserves originals. Per-partition
+completion markers prevent resurrecting cleared logs. Current files win and
+failed groups retry. The installer separately bridges old staged update roots
+before reading ready/package data. Existing inactive current data is archived
+without overwriting an earlier archive; failed moves attempt rollback.
+New settings readers fall back to legacy settings only when the new file is absent.
+Stage the new boot plugin with Save and Reboot to complete the kernel transition.
+
+Active data/export/update paths all use PSVSD_AM. Legacy folder strings remain
+only as explicit migration/fallback constants. The boot-plugin path stays stable
+so existing tai configuration entries do not break. No mapping logic is changed.
+
+Tests cover legacy/current precedence, retry, original retention, no log reimport
+after completion, first-update directory bridging, rename rollback and idempotence.
+Managed boot exercises legacy settings fallback. Launcher tests require 0x70000;
+receipt tests cover expiry, backwards time and the inclusive 20-second boundary.
+The existing display tests and code are retained unchanged.
+
+SDK reference: https://docs.vitasdk.org/group__SceAppMgrUser.html documents
+LIVEAREA_OFF and the usual ByName flags. Combining them here is an implementation
+choice awaiting real Vita verification. The prior flicker fix is hardware-confirmed.
+Default-date TLS compatibility remains unresolved; receipt timing is independent
+of TLS certificate validity. Historical notes follow.
+
+# Previous maintenance release 1.1.7 — preserve focus after updater return
 
 APP_VER 01.17; kernel major 1/minor 17. Both title IDs stay unchanged.
 The user confirms return launch succeeds, but the app loses foreground after a

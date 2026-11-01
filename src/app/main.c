@@ -14,6 +14,7 @@
 #include "touch.h"
 #include "update_install.h"
 #include "artwork.h"
+#include "migration.h"
 #include <psp2/io/stat.h>
 
 static AmUi model;
@@ -173,7 +174,7 @@ static int update_worker(SceSize argc,void *args) {
         if (am_update_download(&install_release,AM_UPDATE_VPK,&update_result,update_progress,NULL)==0) {
             snprintf(update_result.stage,sizeof(update_result.stage),"Stage verified VPK / installer");
             if (am_update_prepare(install_release.version,update_result.reason,sizeof(update_result.reason),update_progress,NULL)==0)
-                update_result.state=UPDATE_READY;
+                { update_result.state=UPDATE_READY;update_result.error=0; }
         }
     } else am_update_check(&update_result);
     __atomic_store_n(&update_done,1,__ATOMIC_RELEASE);
@@ -275,14 +276,18 @@ static int init_display(void) {
 }
 int main(void) {
     if (init_display()<0) return 1;
-    int loaded=am_load_settings(&model.saved);model.pending=model.saved;
-    if (loaded<0) snprintf(model.message,sizeof(model.message),"Settings unreadable; automatic mounting defaults off.");
     draw();
     int resumed=am_update_relaunch_confirm();
+    int migrated=am_migrate_data();
+    int loaded=am_load_settings(&model.saved);model.pending=model.saved;
+    if (loaded<0) snprintf(model.message,sizeof(model.message),"Settings unreadable; automatic mounting defaults off.");
+    am_log("Data path migration: %08X\n",(unsigned)migrated);
+    if (migrated<0) snprintf(model.message,sizeof(model.message),"Data migration incomplete. Existing files retained. See Log.");
     if (resumed>0) {
-        am_log("Updater return acknowledged: PSVSD/AM " ACCESSORY_VERSION "\n");
+        am_log("Updater startup receipt written within 20 seconds: PSVSD/AM " ACCESSORY_VERSION "\n");
         am_log("Installer cleanup deferred until user Exit or Reboot.\n");
-    } else if (resumed<0) am_log("Updater return acknowledgment failed.\n");
+    } else if (resumed<0) am_log("Updater startup receipt rejected or failed (expired/malformed request, clock or write error).\n");
+    redraw=1;
     query_status();refresh_log();
     am_log("Opened PSVSD/AM " ACCESSORY_VERSION "; saved enabled=%d target=%s\n",model.saved.enabled,am_target_name(model.saved.target));
     int artwork=am_artwork_needs_refresh();

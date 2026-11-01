@@ -2,7 +2,8 @@
 #ifndef AM_UPDATE_INSTALL_H
 #define AM_UPDATE_INSTALL_H
 #include "updates.h"
-#define AM_UPDATE_ROOT "ux0:data/PSVSD_Accessory/update"
+#include "../common/paths.h"
+#define AM_UPDATE_ROOT ACCESSORY_DATA_DIR "/update"
 #define AM_UPDATE_VPK AM_UPDATE_ROOT "/release.vpk"
 #define AM_UPDATE_STAGE AM_UPDATE_ROOT "/package"
 #define AM_UPDATE_HELPER AM_UPDATE_ROOT "/helper"

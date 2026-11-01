@@ -35,18 +35,18 @@ int main(void) {
     write_file("app0:sce_sys/livearea/contents/bg.png","background");
     write_file("app0:sce_sys/livearea/contents/startup.png","startup");
     assert(am_artwork_needs_refresh()==1 && !refreshes && !loads);
-    assert(access("ur0:data/PSVSD_Accessory/artwork-pending",F_OK)<0);
+    assert(access("ur0:data/PSVSD_AM/artwork-pending",F_OK)<0);
     assert(access("ur0:appmeta/RTPSV0001",F_OK)<0);
     assert(am_artwork_refresh()==1);assert(refreshes==1 && loads==1 && unloads==1);
     check("ur0:appmeta/RTPSV0001/icon0.png","icon-new");check("ur0:appmeta/RTPSV0001/livearea/contents/startup.png","startup");
     assert(am_artwork_refresh()==0 && refreshes==1);
     write_file("app0:sce_sys/icon0.png","next-icon");refresh_result=-77;
     assert(am_artwork_refresh()==-77 && refreshes==2);
-    assert(access("ur0:data/PSVSD_Accessory/artwork-pending",F_OK)==0);
+    assert(access("ur0:data/PSVSD_AM/artwork-pending",F_OK)==0);
     refresh_result=0;loaded=1;int before_loads=loads,before_unloads=unloads;
     assert(am_artwork_refresh()==1 && refreshes==3);assert(loads==before_loads && unloads==before_unloads);
     check("ur0:appmeta/RTPSV0001/icon0.png","next-icon");
-    assert(access("ur0:data/PSVSD_Accessory/artwork-pending",F_OK)<0);
+    assert(access("ur0:data/PSVSD_AM/artwork-pending",F_OK)<0);
     write_file("app0:sce_sys/livearea/contents/bg.png","changed-background");
     assert(am_artwork_refresh()==1 && refreshes==4);
     write_file("app0:sce_sys/icon0.png","third-icon");fail_rename=1;
@@ -55,9 +55,9 @@ int main(void) {
     assert(remove("app0:sce_sys/icon0.png")==0);assert(am_artwork_refresh()<0 && refreshes==5);
     check("ur0:appmeta/RTPSV0001/icon0.png","third-icon");
     write_file("app0:sce_sys/icon0.png","third-icon");
-    write_file("ur0:data/PSVSD_Accessory/artwork-version","1.1.6");
+    write_file("ur0:data/PSVSD_AM/artwork-version","1.1.7");
     assert(am_artwork_refresh()==1 && refreshes==6);
-    check("ur0:data/PSVSD_Accessory/artwork-version","1.1.7");
+    check("ur0:data/PSVSD_AM/artwork-version","1.1.8");
     assert(am_artwork_refresh()==0 && refreshes==6);
     puts("Artwork: cache replacement, unchanged skip, retry, module ownership and missing source passed");return 0;
 }

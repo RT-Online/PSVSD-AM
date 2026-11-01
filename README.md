@@ -4,7 +4,7 @@
 
 AI tools assisted with code development, documentation, and testing. RefurbedTech directed development and performed hardware testing.
 
-Version **1.1.7** · Vita title ID **RTPSV0001** · Package version **01.17**
+Version **1.1.8** · Vita title ID **RTPSV0001** · Package version **01.18**
 
 ## Features
 
@@ -40,10 +40,10 @@ Use the sidebar or D-pad to navigate. Cross activates choices; Circle/Back retur
 
 ## Configuration and recovery
 
-- Settings: `ur0:data/PSVSD_Accessory/settings.ini`
+- Settings: `ur0:data/PSVSD_AM/settings.ini`
 - Boot plugin: `ur0:tai/psvsd_am.skprx`
-- Kernel/application logs: `ur0:data/PSVSD_Accessory/`
-- Exported report: `ux0:data/PSVSD_Accessory/test.log`
+- Kernel/application logs: `ur0:data/PSVSD_AM/`
+- Exported report: `ux0:data/PSVSD_AM/test.log`
 
 Save manages its marked block in `ur0:tai/config.txt` and retains first backups as `.psvsdam.bak`. Unfinished `.psvsdam.swap` files stop further replacement for recovery. Existing YAMT/StorageMgr assignments are inspected, not changed automatically. Unknown configuration formats stop enabling rather than being guessed.
 
@@ -66,7 +66,7 @@ The three kernel payloads are intentional: `psvsd_am.skprx` is the boot plugin, 
 
 ## Validation and license
 
-Host checks: `sh tests/run_tests.sh`. These exercise control flow with mocked Vita APIs; they cannot prove hardware behavior, private firmware offsets or power-loss recovery. Original hardware reports confirmed secondary file transfers/standby recovery and primary mounting. Version 1.1.7 has passed the host suite, a native VitaSDK build and static import checks; console testing is pending.
+Host checks: `sh tests/run_tests.sh`. These exercise control flow with mocked Vita APIs; they cannot prove hardware behavior, private firmware offsets or power-loss recovery. Original hardware reports confirmed secondary file transfers/standby recovery and primary mounting. Version 1.1.8 has passed the host suite, a native VitaSDK build and static import checks; console testing is pending.
 
 GPL-3.0-or-later; see [COPYING](COPYING) and [third-party notices](docs/THIRD_PARTY_NOTICES.md). Derived from USBMC by Yifan Lu and VitaShell storage code by TheFloW. Font and taiHEN SDK components retain their own licenses.
 
@@ -108,7 +108,7 @@ checks compare numeric versions, optionally prefixed by `v` or `v.`. Supported
 Vita APP_VER mapping is MAJOR.(MINOR*10+PATCH), with minor/patch each 0–9.
 
 Version 1.1.6 and later select the installer from the verified download, so they
-can install 1.1.7 through the app after the release is published. Older versions
+can install 1.1.8 through the app after the release is published. Older versions
 that reuse their own helper may need a manual VitaShell installation once.
 Same-version releases are not offered again.
 
@@ -146,13 +146,13 @@ return-storage mounting still requires Vita testing.
 Update-check failures now show the failed step, hexadecimal error, HTTP status
 and available TLS details directly on the Updates page. The Log refreshes after
 a check and when opened, and shows the latest page. After a manual check, a current diagnostic report
-is automatically exported to `ux0:data/PSVSD_Accessory/test.log`; export failures
+is automatically exported to `ux0:data/PSVSD_AM/test.log`; export failures
 are reported on screen. Offline skips remain silent.
 
 
 ### Bundled TLS — no iTLS-Enso requirement
 
-The current 1.1.7 build includes libcurl, Mbed TLS and a Mozilla CA bundle inside
+The current 1.1.8 build includes libcurl, Mbed TLS and a Mozilla CA bundle inside
 the VPK. Update checks no longer use the Vita's system HTTPS implementation.
 Users do not need to install iTLS-Enso or modify system certificates. TLS 1.2 or
 newer, certificate-chain validation and hostname verification remain required.
@@ -191,13 +191,59 @@ A delayed flip keeps its buffers untouched; failed display calls are logged and
 retried without advancing the buffer state. A spare vertical blank paces drawing.
 These checks replace the assumption that one generic vblank completed each flip.
 
-The confirmed-working title-ID return launch and per-attempt startup receipt are
-retained. The main app draws and acknowledges startup without closing the helper.
-The helper exits when it observes the receipt; if suspended, it can remain until
-explicit user Exit/Reboot cleanup. It still times out visibly when startup is not
-acknowledged and offers an explicit retry. Accepted launches are not resubmitted
-automatically. The next app launch imports update/handoff.log into Log.
+Return now uses the explicit startup flags described below, and a per-attempt
+startup receipt. The main app acknowledges without closing the helper. The helper
+can finish after observing that receipt, or remain suspended until explicit
+Exit/Reboot cleanup. Timeout and retry remain visible. Startup/return API results
+and elapsed receipt timing are imported from update/handoff.log into Log.
 
-The focus and display fixes still require Vita confirmation. If focus is taken
-again, note the timing and export Log; the cleanup/LiveArea operations are no
-longer performed while you are using the app.
+The new launch flags still require Vita confirmation. If startup still stops at
+LiveArea, wait without pressing Start before collecting a new log.
+
+## 1.1.8 restart and data-path update
+
+The installer now requests main-app startup using `sceAppMgrLaunchAppByName` with
+flags `0x70000`: the SDK's usual `0x60000` plus `LIVEAREA_OFF` (`0x10000`). This
+replaces the default-options `LaunchAppByName2` call that was observed opening
+LiveArea instead of starting the app. URI fallback is attempted only on a
+negative API result. The confirmed framebuffer handling is unchanged.
+
+Startup receipts carry a token, request tick and elapsed time. Requests older
+than 20 seconds or with a backwards clock are rejected, so a late manual launch
+cannot be recorded as a timely return. This uses the existing RTC tick and does
+not set the clock or require the calendar date to be correct. A manual Start
+within the receipt window still cannot be distinguished from automatic startup;
+on-device observation remains required. Successful staging no longer logs a
+misleading FFFFFFFF error.
+
+Current data paths:
+
+| Purpose | Path |
+| --- | --- |
+| Exported report | `ux0:data/PSVSD_AM/test.log` |
+| Updater/staging/receipts | `ux0:data/PSVSD_AM/update/` |
+| Settings | `ur0:data/PSVSD_AM/settings.ini` |
+| Application and kernel logs | `ur0:data/PSVSD_AM/` |
+
+At first startup, known settings/logs/artwork markers are copied from the legacy
+`PSVSD_Accessory` folders only when the current destination is absent. Copies are
+streamed, bounded to 16 MiB per file, byte checked and renamed into place. Existing
+current files win. Original files remain as backups. Completion markers prevent
+Clear Log from reimporting old records; failures leave migration retryable.
+Unknown legacy files and unrelated data are untouched.
+
+The first new installer launched by 1.1.7 moves its staged update directory to
+the current path. If an inactive current update directory exists, it is retained
+as `update.pre-migration`; migration refuses to overwrite an existing archive.
+A current ready request wins over a stale legacy request. Rename failure attempts
+to restore the old directory. New app/kernel settings readers can fall back to
+legacy settings when the current file is missing.
+
+After upgrading, use **Reboot → Save and Reboot** once to stage the updated boot
+plugin and settings. Until then, an older resident/boot plugin can still use its
+legacy paths. The boot-plugin filename and tai configuration entry stay stable.
+No log-folder migration changes the actual USB storage mapping.
+
+Test the 1.1.7-to-1.1.8 update without pressing LiveArea Start. Automatic process
+startup, foreground behavior and first-update path migration require Vita
+confirmation; host checks cannot prove those system behaviors.

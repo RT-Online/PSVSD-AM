@@ -1,6 +1,7 @@
 /* Separate installer; only its worker promotes the stopped main app.
  * GPL-3.0-or-later. */
 #include "update_install.h"
+#include "migration.h"
 #include "../common/paths.h"
 #include "ui.h"
 #ifdef PSVSD_AM_HOST_TEST
@@ -87,13 +88,15 @@ static int install_worker(SceSize argc,void *args) {
     __atomic_store_n(&install_done,1,__ATOMIC_RELEASE);return 0;
 }
 int main(void) {
+    int migrated=am_migrate_update();
     int display=init_display();
     if (display<0) { handoff_log("Installer display failed",display);return 1; }
     unsigned tick=0;show(AM_UPDATE_PREPARE,tick++);
     handoff_log("Installer " ACCESSORY_VERSION " started",0);
+    handoff_log("Update path migration",migrated);
     int closed=sceAppMgrDestroyAppByName("RTPSV0001");
     handoff_log("Close previous PSVSD/AM",closed);
-    int worker=sceKernelCreateThread("AMInstallerWorker",install_worker,0x10000100,0x10000,0,0,NULL);
+    int worker=migrated<0?migrated:sceKernelCreateThread("AMInstallerWorker",install_worker,0x10000100,0x10000,0,0,NULL);
     int start=worker;if (start>=0) start=sceKernelStartThread(worker,0,NULL);
     if (start<0) { install_result=start;__atomic_store_n(&install_done,1,__ATOMIC_RELEASE); }
     while (!__atomic_load_n(&install_done,__ATOMIC_ACQUIRE)) {

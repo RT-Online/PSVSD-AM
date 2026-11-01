@@ -15,6 +15,7 @@ static struct {
     int flag_fail, thread_fail, handler_fail, thread_start_fail;
     int suspend_at_delay, ownership_at_delay, uma_other_error;
     const char *config_text;
+    int legacy_config;
     int shell_live,usbserv_after,boot_thread_fail,boot_start_fail,runtime_info;
 } cfg;
 static int patches, releases, unloads, starts, loads, activates;
@@ -70,7 +71,8 @@ static void unchanged(void) {
 int ksceIoOpen(const char *path, int flags, int mode) {
     (void)mode;
     ++io_calls;
-    if (!strcmp(path,AM_SETTINGS_PATH)) return cfg.config_text?3:-1;
+    if (!strcmp(path,AM_SETTINGS_PATH)) return cfg.legacy_config?(int)0x80010002:cfg.config_text?3:-1;
+    if (!strcmp(path,AM_LEGACY_SETTINGS_PATH)) return cfg.legacy_config && cfg.config_text?3:(int)0x80010002;
     if (!strcmp(path,ACCESSORY_KERNEL_DIR "/runtime.txt")) return 4;
     if (flags & SCE_O_WRONLY)
         return cfg.log_fail || (cfg.primary_log_fail && !strcmp(path,LOG_PATH)) ? -1 : 1;
