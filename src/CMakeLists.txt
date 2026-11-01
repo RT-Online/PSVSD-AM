@@ -57,7 +57,7 @@ foreach(mode IN ITEMS psvsd_am usbmc_accessory_probe psvsd_am_status)
   clean_vita_self(${mode}.skprx ${mode} CONFIG ${exports} UNSAFE)
 endforeach()
 
-add_executable(psvsd_am_app app/main.c app/session.c app/manager.c app/prepare.c app/ui.c app/controller.c app/touch.c app/updates.c app/update_network.c app/update_install.c app/launch.c app/return_cleanup.c app/relaunch.c app/migration.c app/artwork.c app/package.c app/package_metadata.c vendor/minizip/unzip.c vendor/minizip/ioapi.c common/settings.c)
+add_executable(psvsd_am_app app/main.c app/session.c app/manager.c app/prepare.c app/ui.c app/controller.c app/touch.c app/updates.c app/update_network.c app/update_install.c app/launch.c app/relaunch.c app/migration.c app/artwork.c app/package.c app/package_metadata.c vendor/minizip/unzip.c vendor/minizip/ioapi.c common/settings.c)
 target_compile_definitions(psvsd_am_app PRIVATE IOAPI_NO_64)
 target_compile_options(psvsd_am_app PRIVATE -Wall -Wextra -Werror -O2 -fno-builtin-printf)
 # Reserve an extra data-segment page for vita-elf-create's appended metadata.
@@ -79,7 +79,7 @@ target_link_libraries(psvsd_am_app SceDisplay_stub SceCtrl_stub SceProcessmgr_st
   SceIofilemgr_stub SceLibKernel_stub SceVshBridge_stub ScePower_stub SceTouch_stub SceLiveArea_stub SceNet_stub SceNetCtl_stub SceAppMgr_stub SceRtc_stub ScePromoterUtil_stub SceSysmodule_stub taihen_stub
   -Wl,--start-group curl mbedtls mbedx509 mbedcrypto everest p256m z zstd pthread -Wl,--end-group)
 clean_vita_self(psvsd_am_app.self psvsd_am_app UNSAFE)
-add_executable(psvsd_am_installer app/installer_main.c app/launch.c app/return_cleanup.c app/relaunch.c app/migration.c app/package.c app/package_metadata.c app/ui.c app/updates.c common/settings.c)
+add_executable(psvsd_am_installer app/installer_main.c app/launch.c app/relaunch.c app/migration.c app/package.c app/package_metadata.c app/ui.c app/updates.c common/settings.c)
 target_compile_options(psvsd_am_installer PRIVATE -Wall -Wextra -Werror -O2 -ffunction-sections -fdata-sections)
 target_link_options(psvsd_am_installer PRIVATE -Wl,--gc-sections)
 target_link_libraries(psvsd_am_installer SceAppMgr_stub SceRtc_stub ScePromoterUtil_stub SceSysmodule_stub SceDisplay_stub SceCtrl_stub SceLibKernel_stub SceIofilemgr_stub SceProcessmgr_stub)

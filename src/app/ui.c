@@ -12,8 +12,6 @@
 #define MUTED COLOR(145,166,190)
 #define ACCENT COLOR(70,220,199)
 #define BAD COLOR(255,139,137)
-#define CONFIRM BAD
-#define CANCEL ACCENT
 static uint32_t *screen;
 static void rect(int x,int y,int w,int h,uint32_t c) {
     if (x<0) { w+=x;x=0; }if (y<0) { h+=y;y=0; }
@@ -221,7 +219,7 @@ static void action_view(const AmUi *m) {
         int y=AM_CHOICE_Y+i*AM_CHOICE_STEP;
         int selected=m->editing && m->field==i;
         round_rect(AM_CHOICE_X,y,AM_CHOICE_W,AM_CHOICE_H,12,selected?COLOR(23,61,74):CARD);
-        text(298,y+22,1,i?CANCEL:CONFIRM,choices[i]);
+        text(298,y+22,1,selected?ACCENT:TEXT,choices[i]);
         if (selected) rect(277,y+14,3,44,ACCENT);
     }
     char note[120];snprintf(note,sizeof(note),"%s | Pending: %s, %s",m->dirty?"Unsaved changes":"Settings unchanged",
@@ -236,8 +234,9 @@ static void clear_log_confirmation(const AmUi *m) {
     const char *choices[]={"Clear Log","Cancel"};
     for (int i=0;i<2;++i) {
         int x=i?AM_CANCEL_X:AM_CONFIRM_X;
-        round_rect(x,AM_CONFIRM_Y,AM_CONFIRM_W,AM_CONFIRM_H,12,m->clear_choice==i?COLOR(23,61,74):CARD);
-        text(x+(AM_CONFIRM_W-width(choices[i],1))/2,AM_CONFIRM_Y+17,1,i?CANCEL:CONFIRM,choices[i]);
+        round_rect(x,AM_CONFIRM_Y,AM_CONFIRM_W,AM_CONFIRM_H,12,i?CARD:COLOR(23,61,74));
+        if (m->clear_choice==i) rect(x+12,AM_CONFIRM_Y+AM_CONFIRM_H-5,AM_CONFIRM_W-24,2,ACCENT);
+        text(x+(AM_CONFIRM_W-width(choices[i],1))/2,AM_CONFIRM_Y+17,1,m->clear_choice==i?ACCENT:MUTED,choices[i]);
     }
 }
 static void copy_view(const AmUi *m) {
@@ -290,8 +289,9 @@ void am_ui_render(uint32_t *pixels,const AmUi *m) {
         const char *labels[]={"Install Update","Cancel"};
         for (int i=0;i<2;++i) {
             int x=i?AM_CANCEL_X:AM_CONFIRM_X;
-            round_rect(x,AM_CONFIRM_Y,AM_CONFIRM_W,AM_CONFIRM_H,12,m->update_choice==i?COLOR(23,61,74):CARD);
-            text(x+(AM_CONFIRM_W-width(labels[i],1))/2,AM_CONFIRM_Y+17,1,i?CANCEL:CONFIRM,labels[i]);
+            round_rect(x,AM_CONFIRM_Y,AM_CONFIRM_W,AM_CONFIRM_H,12,i?CARD:COLOR(23,61,74));
+            if (m->update_choice==i) rect(x+12,AM_CONFIRM_Y+AM_CONFIRM_H-5,AM_CONFIRM_W-24,2,ACCENT);
+            text(x+(AM_CONFIRM_W-width(labels[i],1))/2,AM_CONFIRM_Y+17,1,m->update_choice==i?ACCENT:MUTED,labels[i]);
         }
     }
     rect(26,AM_FOOTER_Y,908,1,BORDER);

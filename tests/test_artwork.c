@@ -57,7 +57,7 @@ int main(void) {
     write_file("app0:sce_sys/icon0.png","third-icon");
     write_file("ur0:data/PSVSD_AM/artwork-version","1.1.9");
     assert(am_artwork_refresh()==1 && refreshes==6);
-    check("ur0:data/PSVSD_AM/artwork-version","1.2.1");
+    check("ur0:data/PSVSD_AM/artwork-version","1.2.2");
     assert(am_artwork_refresh()==0 && refreshes==6);
     write_file("app0:sce_sys/icon0.png","reboot-icon");
     int prior_loads=loads,prior_unloads=unloads;

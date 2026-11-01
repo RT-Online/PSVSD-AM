@@ -56,7 +56,7 @@ static void reset(void) {
     scanned=queued=NULL;now=0;frames=submitted=launch_error=promote_error=0;
     pending=presented=display_error_logged=install_done=install_phase=0;
     flip_delay=1;flip_left=get_error=submit_error=render_count=0;install_result=-1;memset(&model,0,sizeof(model));failure[0]=0;
-    FILE *f=fopen(AM_UPDATE_ROOT "/ready","wb");assert(f);assert(fwrite("01.21",1,6,f)==6);fclose(f);
+    FILE *f=fopen(AM_UPDATE_ROOT "/ready","wb");assert(f);assert(fwrite("01.22",1,6,f)==6);fclose(f);
 }
 int main(void) {
     char root[]="/tmp/am-installer-XXXXXX";assert(mkdtemp(root));assert(chdir(root)==0);

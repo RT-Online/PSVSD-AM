@@ -1,9 +1,9 @@
 #ifndef ACCESSORY_PATHS_H
 #define ACCESSORY_PATHS_H
 #include <stdint.h>
-#define ACCESSORY_VERSION "1.2.1"
+#define ACCESSORY_VERSION "1.2.2"
 /* Monotonic Vita NN.NN revision, independent of semantic version digits. */
-#define ACCESSORY_PACKAGE_VERSION "01.21"
+#define ACCESSORY_PACKAGE_VERSION "01.22"
 #define ACCESSORY_DATA_DIR "ux0:data/PSVSD_AM"
 #define AM_LEGACY_DATA_DIR "ux0:data/PSVSD_Accessory"
 #define AM_LEGACY_KERNEL_DIR "ur0:data/PSVSD_Accessory"

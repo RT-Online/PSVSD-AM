@@ -12,7 +12,7 @@ left edge and eight contacts. Its mechanical reference is Kingston's microSDHC
 technical specification, page 24:
 https://www.kingston.com/datasheets/SDCIT-specsheet-8gb-32gb_en.pdf
 
-Version 1.2.1 uses Vita package APP_VER 01.21. The `format-ver="01.00"` in
+Version 1.2.2 uses Vita package APP_VER 01.22. The `format-ver="01.00"` in
 LiveArea XML describes the XML format and is intentionally unchanged.
 
 The user confirmed a restart displays the new artwork. In 1.1.7, startup only

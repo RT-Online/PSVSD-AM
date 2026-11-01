@@ -4,7 +4,7 @@
 
 AI tools assisted with code development, documentation, and testing. RefurbedTech directed development and performed hardware testing.
 
-Version **1.2.1** · Vita title ID **RTPSV0001** · Package version **01.21**
+Version **1.2.2** · Vita title ID **RTPSV0001** · Package version **01.22**
 
 ## Features
 
@@ -36,8 +36,9 @@ This mirrors the source folders exactly; it does not remove obsolete files alrea
 
 ## Controls
 
-Confirmation text uses coral; cancel/without-save text uses teal. Button actions,
-selection order and default choices are unchanged.
+Popup confirmation buttons use teal backgrounds and Cancel buttons use dark
+backgrounds, with original text colors. An underline indicates selection;
+actions and default Cancel choices are unchanged.
 
 Use the sidebar or D-pad to navigate. Cross activates choices; Circle/Back returns to the previous menu and never exits the app. Reboot and Exit each offer a save option and a proceed-without-save option. Square exports the report. On Log, Triangle opens Clear Log with Cancel selected by default.
 
@@ -69,7 +70,7 @@ The three kernel payloads are intentional: `psvsd_am.skprx` is the boot plugin, 
 
 ## Validation and license
 
-Host checks: `sh tests/run_tests.sh`. These exercise control flow with mocked Vita APIs; they cannot prove hardware behavior, private firmware offsets or power-loss recovery. Original hardware reports confirmed secondary file transfers/standby recovery and primary mounting. Version 1.2.1 has passed the host suite, a native VitaSDK build and static import checks; console testing is pending.
+Host checks: `sh tests/run_tests.sh`. These exercise control flow with mocked Vita APIs; they cannot prove hardware behavior, private firmware offsets or power-loss recovery. Original hardware reports confirmed secondary file transfers/standby recovery and primary mounting. Version 1.2.2 has passed the host suite, a native VitaSDK build and static import checks; console testing is pending.
 
 GPL-3.0-or-later; see [COPYING](COPYING) and [third-party notices](docs/THIRD_PARTY_NOTICES.md). Derived from USBMC by Yifan Lu and VitaShell storage code by TheFloW. Font and taiHEN SDK components retain their own licenses.
 
@@ -114,7 +115,7 @@ AM_VERSION so installation validates the exact release tag and matching package.
 Version 1.1.6 and later select the helper from the verified download. However,
 installed versions through 1.1.8 still initiate that first handoff with the older
 URI call. If an old version stops at installer LiveArea, press Start once to
-finish, or install 1.2.1 manually with VitaShell. Only after the new main app is
+finish, or install 1.2.2 manually with VitaShell. Only after the new main app is
 running can its corrected installer-launch call be used. Same-version releases
 are not offered again.
 
@@ -158,32 +159,20 @@ are reported on screen. Offline skips remain silent.
 
 ### Bundled TLS — no iTLS-Enso requirement
 
-The current 1.2.1 build includes libcurl, Mbed TLS and a Mozilla CA bundle inside
+The current 1.2.2 build includes libcurl, Mbed TLS and a Mozilla CA bundle inside
 the VPK. Update checks no longer use the Vita's system HTTPS implementation.
 Users do not need to install iTLS-Enso or modify system certificates. TLS 1.2 or
 newer, certificate-chain validation and hostname verification remain required.
 The network feature still needs testing on the Vita; it does not change storage
 settings. If it fails, the Updates page includes a readable libcurl error reason.
 
-### Update handoffs (1.2.1)
+### Update handoffs (1.2.2)
 
-The working main-to-installer title launch remains unchanged. The return path
-uses `_sceAppMgrLaunchAppByUri2` with LIVEAREA_OFF | EXIT_TO (0x50000), the
-installer's AppMgr application ID as parent, disabled callbacks and zeroed
-reserved fields. This explicitly identifies the departing application rather
-than queuing another generic title launch. A rejected lookup/launch stays on
-the installer retry screen; there is no generic-launch fallback.
-
-This is a hardware-test candidate for the close-previous-app prompt, not a
-confirmed firmware fix. The SDK describes EXIT_TO but does not guarantee prompt
-suppression. The installer display and promotion sequence are unchanged.
-
-A bounded startup receipt is consumed once, expires after five minutes and
-rejects backwards ticks. It is diagnostic, not a helper-exit wait. After a valid
-return and initial UI setup, the main app attempts targeted helper deletion
-once. It refuses to delete an installer reported as running, and does not use
-DestroyApp or LiveArea refresh during this cleanup. Errors are logged and
-explicit Exit remains a fallback. Reboot has no new Shell operations.
+Both directions use the 1.2.0 title-launch sequence, with flags 0x70000.
+The installer exits after an accepted request; a failed request stays visible
+for retry. The Shell may still ask to close the installer. Startup does not
+perform package deletion or LiveArea refresh. Explicit Exit removes the helper.
+One-shot startup receipts expire after five minutes and are diagnostic only.
 
 ### Save and Reboot after an update
 
@@ -197,8 +186,7 @@ reset API directly. It logs the returned code and displays an error if reset is
 rejected. Save failure still prevents reboot. No storage mapping logic changes.
 
 Actual LiveArea refresh and helper removal remain available on explicit Exit.
-The temporary helper bubble can remain through reboot until a later Exit. A valid update-return receipt permits the targeted cleanup above; ordinary
-startup and idle code do not perform package deletion. This timing tradeoff keeps Shell calls
+The temporary helper bubble can remain through reboot until a later Exit. Startup and idle code do not perform package deletion. This timing tradeoff keeps Shell calls
 out of the foreground-dependent reboot sequence.
 
 ### Artwork and data folders
@@ -237,3 +225,21 @@ Build, host tests and package checks pass. Both automatic launches, the
 post-update Save/Reboot path and artwork reload still require Vita confirmation.
 Default-date TLS compatibility remains unresolved. No GitHub changes are made
 by preparing these packages.
+
+## 1.2.2 regression correction
+
+The 1.2.1 hardware log showed a successful install, a 33-second delayed startup,
+successful automatic cleanup and subsequent main-app activity despite the reported
+return to LiveArea. It did not establish a process crash or isolate which of the
+two new Shell operations caused lost focus. The generic 0x70000 title launch from
+1.2.0 is restored and automatic startup package deletion is removed. Cleanup is
+again on explicit Exit. The earlier close-installer prompt may remain. This is a
+regression recovery, not a claim that prompt suppression has been solved.
+
+Popup confirmation buttons now use the teal background and Cancel the dark card
+background. Original text colors are restored. A selection underline preserves
+visible focus; default Cancel selection, actions and positions are unchanged.
+The Reboot/Exit choice screens retain their original styling.
+
+One-shot five-minute diagnostic receipts are retained. Installer display, storage
+copying and reboot logic are unchanged. Validate this build on Vita.

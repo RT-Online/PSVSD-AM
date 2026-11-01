@@ -66,16 +66,16 @@ Keep generated VPK/SKPRX binaries and their checksums in GitHub Releases. Commit
 
 ## Version metadata
 
-`src/common/paths.h` is the source of truth for semantic release 1.2.1 and
-Vita package revision 01.21. CMake derives both app/helper SFO fields and kernel
+`src/common/paths.h` is the source of truth for semantic release 1.2.2 and
+Vita package revision 01.22. CMake derives both app/helper SFO fields and kernel
 module metadata from it. Increment the NN.NN package revision for each release;
 do not calculate it from semantic version digits. After 01.99 use 02.00.
-Semantic versions such as 1.2.10 and 1.10.0 are supported. The updater compares
+Semantic versions such as 1.2.20 and 1.10.0 are supported. The updater compares
 numeric semantic components, verifies the release digest and matches AM_VERSION
 in app/helper metadata. APP_VER must match between both packages.
 The settings schema and LiveArea XML format versions are independent.
 
-## Maintenance changes in 1.2.1
+## Maintenance changes in 1.2.2
 
 - Installer exits after an accepted main-app launch; negative results retain retry.
 - Diagnostic receipts no longer delay helper exit. Confirmed display logic is unchanged.
@@ -89,24 +89,20 @@ Confirm the return transition on hardware, including the previous-app prompt,
 then test Save and Reboot after updating. Arbitrary/default-date TLS compatibility
 remains unresolved; certificate verification has not been disabled.
 
-## 1.2.1 installer handoff candidate
+## 1.2.2 regression correction
 
-The outbound 0x70000 title launch is retained. Returning from RTPSVUPD1 uses
-_sceAppMgrGetStatusByName to obtain its AppMgr application ID, then
-_sceAppMgrLaunchAppByUri2 with LIVEAREA_OFF | EXIT_TO and an explicit parent.
-Callback IDs are -1, option/reserved fields are zero. A negative lookup or launch
-is logged/returned without a fallback that could duplicate a queued launch.
-This tests explicit exit-to semantics; SDK documentation does not establish
-that the system confirmation will be suppressed on every supported firmware.
+The 1.2.1 hardware log showed a successful install, a 33-second delayed startup,
+successful automatic cleanup and subsequent main-app activity despite the reported
+return to LiveArea. It did not establish a process crash or isolate which of the
+two new Shell operations caused lost focus. The generic 0x70000 title launch from
+1.2.0 is restored and automatic startup package deletion is removed. Cleanup is
+again on explicit Exit. The earlier close-installer prompt may remain. This is a
+regression recovery, not a claim that prompt suppression has been solved.
 
-A valid one-shot return receipt allows one targeted helper deletion after setup.
-Live helpers and unknown status errors prevent deletion. No LiveArea refresh or
-DestroyApp call occurs on this path. Exit-only artwork refresh and file-only
-reboot preparation remain. Receipt expiry is five minutes to accommodate a
-user-delayed system confirmation; successful receipts are consumed.
+Popup confirmation buttons now use the teal background and Cancel the dark card
+background. Original text colors are restored. A selection underline preserves
+visible focus; default Cancel selection, actions and positions are unchanged.
+The Reboot/Exit choice screens retain their original styling.
 
-Primary API reference: https://github.com/vitasdk/vita-headers/blob/master/include/psp2/appmgr.h
-
-Console validation remains required for prompt suppression, automatic cleanup
-and focus retention. Host mocks verify arguments, failure handling and deletion
-guards; they cannot prove Shell behavior.
+One-shot five-minute diagnostic receipts are retained. Installer display, storage
+copying and reboot logic are unchanged. Validate this build on Vita.
