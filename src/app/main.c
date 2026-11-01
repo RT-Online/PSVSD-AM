@@ -125,7 +125,17 @@ static int request_original(void *ctx,char *message,size_t cap) {
     }
     return 0;
 }
+static int cleanup_installer(const char *when) {
+    int ret=am_update_cleanup_installer();
+    am_log("Temporary installer cleanup before %s: %08X\n",when,(unsigned)ret);
+    return ret;
+}
 static int save(void) {
+    int cleaned=cleanup_installer("save / storage preparation");
+    if (cleaned<0) {
+        snprintf(model.message,sizeof(model.message),"Installer cleanup failed: %08X. Copy/save cancelled. See Log.",(unsigned)cleaned);
+        redraw=1;return cleaned;
+    }
     model.busy=1;model.copy_active=0;model.message[0]=0;memset(&model.copy,0,sizeof(model.copy));draw();
     query_status();
     uint32_t last=0;
@@ -252,19 +262,6 @@ static void install_update(void) {
         snprintf(model.message,sizeof(model.message),"Could not start installer: %08X",(unsigned)ret);
     }
 }
-/* Shell-facing cleanup is allowed on Exit, never before requesting a reboot. */
-static void cleanup_installer_on_exit(void) {
-    SceIoStat info;
-    if (model.busy || update_thread>=0) return;
-    int artwork=am_artwork_refresh();
-    am_log("Artwork refresh on user exit/reboot: %08X\n",(unsigned)artwork);
-    if (sceIoGetstat("ux0:app/RTPSVUPD1/eboot.bin",&info)<0) return;
-    int stopped=sceAppMgrDestroyAppByName("RTPSVUPD1");
-    am_log("Stop installer on user exit/reboot: %08X\n",(unsigned)stopped);
-    int ret=am_package_remove_helper();
-    if (ret>=0) { remove(AM_UPDATE_ROOT "/result");am_update_relaunch_cancel(); }
-    am_log("Installer cleanup on user exit/reboot: %08X\n",(unsigned)ret);
-}
 static int init_display(void) {
     SceUID block=sceKernelAllocMemBlock("PSVSDAMDisplay",SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW,4*1024*1024,NULL);
     if (block<0) return block;
@@ -285,7 +282,7 @@ int main(void) {
     if (migrated<0) snprintf(model.message,sizeof(model.message),"Data migration incomplete. Existing files retained. See Log.");
     if (resumed>0) {
         am_log("Updater startup receipt written within five minutes: PSVSD/AM " ACCESSORY_VERSION "\n");
-        am_log("Installer cleanup deferred until explicit Exit.\n");
+        am_log("Installer cleanup runs before storage preparation and on Exit/Reboot.\n");
     } else if (resumed<0) am_log("Updater startup receipt rejected or failed (expired/malformed request, clock or write error).\n");
     redraw=1;
     query_status();refresh_log();
@@ -381,13 +378,19 @@ int main(void) {
         }
         if (action==ACTION_REBOOT) {
             am_log("User requested reboot.\n");
-            /* No LiveArea/promoter calls here: foreground is needed for reset. */
+            /* Cleanup is independent of Save. No LiveArea refresh on the reboot path. */
+            cleanup_installer("reboot");
             int artwork=am_artwork_sync_files();
             am_log("Artwork files prepared before reboot: %08X\n",(unsigned)artwork);
             int r=scePowerRequestColdReset();
             am_log("Cold reboot request returned: %08X\n",(unsigned)r);
             snprintf(model.message,sizeof(model.message),r<0?"Reboot failed: %08X. See Log.":"Reboot requested: %08X",(unsigned)r);
-        } else if (action==ACTION_EXIT) { cleanup_installer_on_exit();exiting=1; }
+        } else if (action==ACTION_EXIT) {
+            cleanup_installer("exit");
+            int artwork=am_artwork_refresh();
+            am_log("Artwork refresh on explicit exit: %08X\n",(unsigned)artwork);
+            exiting=1;
+        }
         if (action!=ACTION_NONE) am_touch_block(&touch_state);
         if (++ticks%25==0) { am_status(&model.status);redraw=1; }
         sceKernelDelayThread(20000);

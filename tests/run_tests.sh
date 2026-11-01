@@ -61,3 +61,8 @@ cc -std=c99 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
   -DPSVSD_AM_HOST_TEST=1 -I"$test_dir" "$test_dir/test_migration.c" \
   "$test_dir/../src/app/migration.c" -o "$test_out/test_migration"
 ASAN_OPTIONS=detect_leaks=0 "$test_out/test_migration"
+
+cc -std=c99 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
+  -DPSVSD_AM_HOST_TEST=1 -I"$test_dir" "$test_dir/test_cleanup.c" \
+  "$test_dir/../src/app/installer_cleanup.c" -o "$test_out/test_cleanup"
+ASAN_OPTIONS=detect_leaks=0 "$test_out/test_cleanup"

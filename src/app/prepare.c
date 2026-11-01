@@ -289,6 +289,11 @@ static int prepare_apps(int restoring,AmCopyCallback progress,void *ctx,char *me
     if (!cap) return COPY_ERROR;
     message[0]=0;
     if (!storage_ready(restoring)) { snprintf(message,cap,"Destination must be verified at uma0 before copying.");return COPY_ERROR; }
+    SceIoStat helper_info;
+    int helper=sceIoGetstat("uma0:app/RTPSVUPD1",&helper_info);
+    if (helper>=0) helper=SCE_S_ISDIR(helper_info.st_mode)?remove_tree("uma0:app/RTPSVUPD1",0):COPY_ERROR;
+    else if (helper==COPY_ENOENT) helper=0;
+    if (helper<0) { snprintf(message,cap,"Cannot remove temporary installer from destination. See Log.");am_log("Destination installer cleanup failed: %08X\n",(unsigned)helper);return helper; }
     Copy *c=calloc(1,sizeof(*c));if (!c) return COPY_ERROR;
     c->state.restoring=restoring;
     c->progress=progress;c->ctx=ctx;c->first=malloc(COPY_CHUNK);c->second=malloc(COPY_CHUNK);

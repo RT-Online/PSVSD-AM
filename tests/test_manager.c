@@ -154,6 +154,8 @@ static void copy_fixture(void) {
     fixture("ux0:app/VITASHELL/resources/data.bin",data,sizeof(data));
     put("uma0:app/RTPSV0001/eboot.bin","old app");put("uma0:app/VITASHELL/eboot.bin","old shell");
     put("uma0:app/VITASHELL/user-extra","keep this extra destination file");
+    assert(!mkdir(mapped("uma0:app/RTPSVUPD1",p),0700));
+    fixture("uma0:app/RTPSVUPD1/eboot.bin","old temporary installer",23);
 }
 static void copy_cb(const AmCopyProgress *p,void *ctx) {
     (void)ctx;assert(p->percent>=cfg.copy_percent && p->percent<=100);
@@ -412,6 +414,7 @@ int main(void) {
     assert(sceIoMkdir("uma0:app/RTPSV0001/eboot.bin",0700)==0);s=(AmSettings){1,AM_UX0};
     assert(am_save_settings(&s,message,sizeof(message))==0);
     assert(sceIoGetstat("uma0:app/RTPSV0001/eboot.bin",&copied)==0 && SCE_S_ISREG(copied.st_mode));
+    assert(!local_exists("uma0:app/RTPSVUPD1"));
     reset();copy_fixture();put(ACCESSORY_KERNEL_DIR "/runtime.txt","stale");s=(AmSettings){1,AM_UX0};
     assert(am_save_settings_with_progress(&s,copy_cb,NULL,message,sizeof(message))<0 && !cfg.copy_callbacks);
     assert(!local_exists("uma0:data/PSVSD_AM"));

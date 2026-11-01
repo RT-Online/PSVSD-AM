@@ -15,6 +15,7 @@ int am_update_relaunch_start(uint32_t token);
 int am_update_relaunch_confirm(void);
 void am_update_relaunch_cancel(void);
 int am_package_remove_helper(void);
+int am_update_cleanup_installer(void);
 int am_package_promote(const char *path);
 int am_package_release(const char *path,const char *semantic,char package[6]);
 int am_package_helper_release(const char *path,const char *semantic,const char *package);

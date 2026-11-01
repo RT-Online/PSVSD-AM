@@ -4,7 +4,7 @@
 
 AI tools assisted with code development, documentation, and testing. RefurbedTech directed development and performed hardware testing.
 
-Version **1.2.2** · Vita title ID **RTPSV0001** · Package version **01.22**
+Version **1.2.3** · Vita title ID **RTPSV0001** · Package version **01.23**
 
 ## Features
 
@@ -70,7 +70,7 @@ The three kernel payloads are intentional: `psvsd_am.skprx` is the boot plugin, 
 
 ## Validation and license
 
-Host checks: `sh tests/run_tests.sh`. These exercise control flow with mocked Vita APIs; they cannot prove hardware behavior, private firmware offsets or power-loss recovery. Original hardware reports confirmed secondary file transfers/standby recovery and primary mounting. Version 1.2.2 has passed the host suite, a native VitaSDK build and static import checks; console testing is pending.
+Host checks: `sh tests/run_tests.sh`. These exercise control flow with mocked Vita APIs; they cannot prove hardware behavior, private firmware offsets or power-loss recovery. Original hardware reports confirmed secondary file transfers/standby recovery and primary mounting. Version 1.2.3 has passed the host suite, a native VitaSDK build and static import checks; console testing is pending.
 
 GPL-3.0-or-later; see [COPYING](COPYING) and [third-party notices](docs/THIRD_PARTY_NOTICES.md). Derived from USBMC by Yifan Lu and VitaShell storage code by TheFloW. Font and taiHEN SDK components retain their own licenses.
 
@@ -115,7 +115,7 @@ AM_VERSION so installation validates the exact release tag and matching package.
 Version 1.1.6 and later select the helper from the verified download. However,
 installed versions through 1.1.8 still initiate that first handoff with the older
 URI call. If an old version stops at installer LiveArea, press Start once to
-finish, or install 1.2.2 manually with VitaShell. Only after the new main app is
+finish, or install 1.2.3 manually with VitaShell. Only after the new main app is
 running can its corrected installer-launch call be used. Same-version releases
 are not offered again.
 
@@ -159,19 +159,20 @@ are reported on screen. Offline skips remain silent.
 
 ### Bundled TLS — no iTLS-Enso requirement
 
-The current 1.2.2 build includes libcurl, Mbed TLS and a Mozilla CA bundle inside
+The current 1.2.3 build includes libcurl, Mbed TLS and a Mozilla CA bundle inside
 the VPK. Update checks no longer use the Vita's system HTTPS implementation.
 Users do not need to install iTLS-Enso or modify system certificates. TLS 1.2 or
 newer, certificate-chain validation and hostname verification remain required.
 The network feature still needs testing on the Vita; it does not change storage
 settings. If it fails, the Updates page includes a readable libcurl error reason.
 
-### Update handoffs (1.2.2)
+### Update handoffs (1.2.3)
 
 Both directions use the 1.2.0 title-launch sequence, with flags 0x70000.
 The installer exits after an accepted request; a failed request stays visible
 for retry. The Shell may still ask to close the installer. Startup does not
-perform package deletion or LiveArea refresh. Explicit Exit removes the helper.
+perform package deletion or LiveArea refresh. Helper cleanup runs before
+storage preparation and on explicit Exit/Reboot, with or without Save.
 One-shot startup receipts expire after five minutes and are diagnostic only.
 
 ### Save and Reboot after an update
@@ -226,7 +227,7 @@ post-update Save/Reboot path and artwork reload still require Vita confirmation.
 Default-date TLS compatibility remains unresolved. No GitHub changes are made
 by preparing these packages.
 
-## 1.2.2 regression correction
+## 1.2.3 regression correction
 
 The 1.2.1 hardware log showed a successful install, a 33-second delayed startup,
 successful automatic cleanup and subsequent main-app activity despite the reported
@@ -243,3 +244,19 @@ The Reboot/Exit choice screens retain their original styling.
 
 One-shot five-minute diagnostic receipts are retained. Installer display, storage
 copying and reboot logic are unchanged. Validate this build on Vita.
+
+## 1.2.3 temporary installer cleanup
+
+Before Save/storage preparation, and independently on Exit and Reboot (including
+without-save choices), remove the separately installed RTPSVUPD1 helper using
+its exact title ID. Save/copy stops if this cleanup fails; explicit Exit/Reboot
+log failures and continue their requested action. No startup cleanup is added.
+After verifying the destination mount and before staging app copies, remove only
+its stale uma0:app/RTPSVUPD1 folder; failure blocks copying. The embedded installer
+inside RTPSV0001 is retained for future updates. Other app folders are untouched.
+
+Helper cleanup is separated from artwork refresh. Reboot retains file-only cache
+preparation and always reaches the reset request after cleanup returns, regardless
+of cleanup status. Full LiveArea refresh remains on Exit. Console validation is
+required for reboot/focus after promoter deletion; this change does not claim to
+fix Shell image caching or the close-installer launch prompt.

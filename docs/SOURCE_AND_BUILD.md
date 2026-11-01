@@ -66,16 +66,16 @@ Keep generated VPK/SKPRX binaries and their checksums in GitHub Releases. Commit
 
 ## Version metadata
 
-`src/common/paths.h` is the source of truth for semantic release 1.2.2 and
-Vita package revision 01.22. CMake derives both app/helper SFO fields and kernel
+`src/common/paths.h` is the source of truth for semantic release 1.2.3 and
+Vita package revision 01.23. CMake derives both app/helper SFO fields and kernel
 module metadata from it. Increment the NN.NN package revision for each release;
 do not calculate it from semantic version digits. After 01.99 use 02.00.
-Semantic versions such as 1.2.20 and 1.10.0 are supported. The updater compares
+Semantic versions such as 1.2.30 and 1.10.0 are supported. The updater compares
 numeric semantic components, verifies the release digest and matches AM_VERSION
 in app/helper metadata. APP_VER must match between both packages.
 The settings schema and LiveArea XML format versions are independent.
 
-## Maintenance changes in 1.2.2
+## Maintenance changes in 1.2.3
 
 - Installer exits after an accepted main-app launch; negative results retain retry.
 - Diagnostic receipts no longer delay helper exit. Confirmed display logic is unchanged.
@@ -89,7 +89,7 @@ Confirm the return transition on hardware, including the previous-app prompt,
 then test Save and Reboot after updating. Arbitrary/default-date TLS compatibility
 remains unresolved; certificate verification has not been disabled.
 
-## 1.2.2 regression correction
+## 1.2.3 regression correction
 
 The 1.2.1 hardware log showed a successful install, a 33-second delayed startup,
 successful automatic cleanup and subsequent main-app activity despite the reported
@@ -106,3 +106,19 @@ The Reboot/Exit choice screens retain their original styling.
 
 One-shot five-minute diagnostic receipts are retained. Installer display, storage
 copying and reboot logic are unchanged. Validate this build on Vita.
+
+## 1.2.3 temporary installer cleanup
+
+Before Save/storage preparation, and independently on Exit and Reboot (including
+without-save choices), remove the separately installed RTPSVUPD1 helper using
+its exact title ID. Save/copy stops if this cleanup fails; explicit Exit/Reboot
+log failures and continue their requested action. No startup cleanup is added.
+After verifying the destination mount and before staging app copies, remove only
+its stale uma0:app/RTPSVUPD1 folder; failure blocks copying. The embedded installer
+inside RTPSV0001 is retained for future updates. Other app folders are untouched.
+
+Helper cleanup is separated from artwork refresh. Reboot retains file-only cache
+preparation and always reaches the reset request after cleanup returns, regardless
+of cleanup status. Full LiveArea refresh remains on Exit. Console validation is
+required for reboot/focus after promoter deletion; this change does not claim to
+fix Shell image caching or the close-installer launch prompt.

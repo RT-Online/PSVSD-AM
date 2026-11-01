@@ -39,16 +39,16 @@ int main(void) {
     assert(access(AM_APP_LOG ".migrate-new",F_OK)<0);fail_rename=NULL;
     assert(am_migrate_data()==1);check(AM_APP_LOG,"legacy app log");assert(am_migrate_data()==0);
     assert(mkdir(AM_LEGACY_DATA_DIR "/update",0700)==0);
-    put(AM_LEGACY_DATA_DIR "/update/ready","01.22");put(AM_LEGACY_DATA_DIR "/update/package-data","verified package");
+    put(AM_LEGACY_DATA_DIR "/update/ready","01.23");put(AM_LEGACY_DATA_DIR "/update/package-data","verified package");
     assert(mkdir(ACCESSORY_DATA_DIR "/update",0700)==0);put(ACCESSORY_DATA_DIR "/update/old-result","saved diagnostics");
     put(ACCESSORY_DATA_DIR "/update/ready","01.17");
     fail_rename=AM_LEGACY_DATA_DIR "/update";assert(am_migrate_update()<0);
     check(ACCESSORY_DATA_DIR "/update/old-result","saved diagnostics");check(AM_LEGACY_DATA_DIR "/update/package-data","verified package");
     fail_rename=NULL;assert(am_migrate_update()==1);
-    check(ACCESSORY_DATA_DIR "/update/ready","01.22");check(ACCESSORY_DATA_DIR "/update/package-data","verified package");
+    check(ACCESSORY_DATA_DIR "/update/ready","01.23");check(ACCESSORY_DATA_DIR "/update/package-data","verified package");
     check(ACCESSORY_DATA_DIR "/update.pre-migration/old-result","saved diagnostics");assert(am_migrate_update()==0);
     /* A current request wins; an old leftover must not replace it. */
     assert(mkdir(AM_LEGACY_DATA_DIR "/update",0700)==0);put(AM_LEGACY_DATA_DIR "/update/ready","stale");
-    assert(am_migrate_update()==0);check(ACCESSORY_DATA_DIR "/update/ready","01.22");
+    assert(am_migrate_update()==0);check(ACCESSORY_DATA_DIR "/update/ready","01.23");
     puts("Migration: settings/log preservation, current precedence, failed-copy retry, legacy installer bridge, rename rollback and idempotence passed");return 0;
 }
