@@ -62,7 +62,7 @@ static int replace(const char *source,const char *target) {
     else if (saved) remove(backup);
     return ok?0:-1;
 }
-int am_artwork_refresh(void) {
+int am_artwork_needs_refresh(void) {
     int changed=0;
     for (unsigned i=0;i<sizeof(files)/sizeof(files[0]);++i) {
         char source[192],target[192];
@@ -79,7 +79,11 @@ int am_artwork_refresh(void) {
     if (strcmp(version,ACCESSORY_VERSION)) changed=1;
     FILE *pending=fopen(PENDING,"rb");
     if (pending) fclose(pending);
-    if (!changed && !pending) return 0;
+    return changed || pending!=NULL;
+}
+int am_artwork_refresh(void) {
+    if (!am_artwork_needs_refresh()) return 0;
+    FILE *saved;
     sceIoMkdir(ACCESSORY_KERNEL_DIR,0777);
     FILE *marker=fopen(PENDING,"wb");if (!marker) return -1;
     int ok=fputs("refresh\n",marker)>=0;if (fclose(marker)) ok=0;if (!ok) return -1;

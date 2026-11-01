@@ -12,10 +12,10 @@ left edge and eight contacts. Its mechanical reference is Kingston's microSDHC
 technical specification, page 24:
 https://www.kingston.com/datasheets/SDCIT-specsheet-8gb-32gb_en.pdf
 
-Version 1.1.6 uses Vita package APP_VER 01.16. The `format-ver="01.00"` in
+Version 1.1.7 uses Vita package APP_VER 01.17. The `format-ver="01.00"` in
 LiveArea XML describes the XML format and is intentionally unchanged.
 
-From 1.1.5, startup repairs this title's appmeta source images and requests
-LiveArea replacement. In 1.1.6, this also runs once per version and shows a restart
-notice. The user confirmed restarting displays the new artwork; the Shell can
-retain its old in-memory rendered images until then.
+The user confirmed a restart displays the new artwork. In 1.1.7, startup only
+checks whether refresh is needed. Cache writes and LiveArea replacement run on
+explicit Exit/Reboot to avoid changing Shell metadata during an active session.
+Choose Reboot to clear the home screen's retained rendered images.

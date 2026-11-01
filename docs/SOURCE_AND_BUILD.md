@@ -1,4 +1,40 @@
-# Current maintenance release 1.1.6 — stable installer display and confirmed return
+# Current maintenance release 1.1.7 — preserve focus after updater return
+
+APP_VER 01.17; kernel major 1/minor 17. Both title IDs stay unchanged.
+The user confirms return launch succeeds, but the app loses foreground after a
+few seconds and remains running; manually reopening stays in the app. Updater
+flicker also persists. The exact source of Shell focus changes is unproven.
+
+Remove main-app startup DestroyAppByName and the two-second idle DeletePkg
+scheduler. Metadata refresh is another Shell-facing startup action, so split
+artwork.c into a read-only needs-refresh check and the existing writing/system
+refresh routine. Startup uses only the former. Exit/Reboot performs cache refresh,
+targeted helper stop/removal and receipt cleanup. Failed Save performs neither.
+The obsolete AmUpdateCleanup type, tick function and scheduler-only tests are
+removed. No UI action, mount routing or TLS behavior changes.
+
+For the installer, generic vblank is no longer evidence that the queued buffer
+became active. Keep a pending buffer until sceDisplayWaitSetFrameBuf plus an
+immediate sceDisplayGetFrameBuf query confirms it. Do not render or submit another
+frame while pending. Query current scanout before choosing the inactive buffer.
+Check submission/wait/query results and log the first display error. Keep state
+unchanged on failure; pace retries rather than spinning. Native-source host tests
+simulate delayed flips and display failures instead of assuming every vblank
+immediately presents a queued frame.
+
+The title-ID launch and receipt wait remain. The main app does not destroy its
+launcher after acknowledging. Helper self-exit remains; a suspended helper may
+persist until explicit Exit/Reboot cleanup. This preserves the working launch
+path while removing automatic main-app metadata actions as focus suspects.
+
+Native build and host tests cannot prove Vita focus ownership or presentation
+behavior. On-device testing remains required. 1.1.6 can use the downloaded 1.1.7
+helper in the same update, so another manual upgrade is not required from 1.1.6.
+Default-date TLS and immediate in-memory artwork invalidation remain unresolved.
+
+Historical notes follow; the behavior above describes the current build.
+
+# Previous maintenance release 1.1.6 — stable installer display and confirmed return
 
 APP_VER 01.16; kernel major 1/minor 16. Both title IDs stay unchanged.
 The user confirmed 1.1.5 starts the installer automatically, but its single-buffer

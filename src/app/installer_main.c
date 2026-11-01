@@ -17,7 +17,7 @@
 #include <stdint.h>
 #include <string.h>
 static uint32_t *buffers[2];
-static unsigned front;
+static unsigned pending,presented,display_error_logged;
 static AmUi model;
 static int install_result=-1;
 static unsigned install_done,install_phase;
@@ -37,19 +37,44 @@ static int init_display(void) {
     model.nav=VIEW_UPDATES;model.busy=1;model.update.state=UPDATE_INSTALLING;
     return 0;
 }
+static void display_error(const char *stage,int error) {
+    if (error<0 && !display_error_logged) { handoff_log(stage,error);display_error_logged=1; }
+}
+static void pace(void) {
+    int ret=sceDisplayWaitVblankStart();
+    if (ret<0) { display_error("Display pace",ret);sceKernelDelayThread(16667); }
+}
+static int finish_flip(void) {
+    int ret=sceDisplayWaitSetFrameBuf();
+    if (ret<0) { display_error("Wait for framebuffer",ret);return 0; }
+    SceDisplayFrameBuf actual={0};actual.size=sizeof(actual);
+    ret=sceDisplayGetFrameBuf(&actual,SCE_DISPLAY_SETBUF_IMMEDIATE);
+    if (ret<0) { display_error("Read presented framebuffer",ret);return 0; }
+    if (actual.base!=buffers[pending-1]) return 0;
+    pending=0;presented=1;return 1;
+}
 static void show(unsigned phase,unsigned tick) {
+    /* Do not submit another frame or reuse either buffer until the last flip
+     * is observed. A successful generic vblank wait alone did not prove that. */
+    if (pending && !finish_flip()) { pace();return; }
+    unsigned next=0;
+    if (presented) {
+        SceDisplayFrameBuf actual={0};actual.size=sizeof(actual);
+        int ret=sceDisplayGetFrameBuf(&actual,SCE_DISPLAY_SETBUF_IMMEDIATE);
+        if (ret<0) { display_error("Read active framebuffer",ret);pace();return; }
+        next=actual.base==buffers[0]?1:0;
+    }
     model.update_animation=tick;model.update_progress=(AmUpdateProgress){phase,0,0};
     model.update.error=phase==AM_UPDATE_INSTALL_ERROR?install_result:0;
     snprintf(model.update.reason,sizeof(model.update.reason),"%s",failure);
     snprintf(model.update.stage,sizeof(model.update.stage),"%s",failure_title);
     if (phase==AM_UPDATE_COMPLETE) model.update_progress.done=model.update_progress.total=1;
-    unsigned next=front^1u;
     am_ui_render(buffers[next],&model);
     SceDisplayFrameBuf display={sizeof(display),buffers[next],960,SCE_DISPLAY_PIXELFORMAT_A8B8G8R8,960,544};
-    sceDisplaySetFrameBuf(&display,SCE_DISPLAY_SETBUF_NEXTFRAME);
-    sceDisplayWaitVblankStart();front=next;
-    /* Two vertical blanks per frame: about 30 fps, never repaint scanout. */
-    sceDisplayWaitVblankStart();
+    int ret=sceDisplaySetFrameBuf(&display,SCE_DISPLAY_SETBUF_NEXTFRAME);
+    if (ret<0) display_error("Submit framebuffer",ret);
+    else { pending=next+1;finish_flip(); }
+    pace();
 }
 static int install_worker(SceSize argc,void *args) {
     (void)argc;(void)args;

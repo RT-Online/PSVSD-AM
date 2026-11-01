@@ -4,7 +4,7 @@
 
 AI tools assisted with code development, documentation, and testing. RefurbedTech directed development and performed hardware testing.
 
-Version **1.1.6** · Vita title ID **RTPSV0001** · Package version **01.16**
+Version **1.1.7** · Vita title ID **RTPSV0001** · Package version **01.17**
 
 ## Features
 
@@ -66,7 +66,7 @@ The three kernel payloads are intentional: `psvsd_am.skprx` is the boot plugin, 
 
 ## Validation and license
 
-Host checks: `sh tests/run_tests.sh`. These exercise control flow with mocked Vita APIs; they cannot prove hardware behavior, private firmware offsets or power-loss recovery. Original hardware reports confirmed secondary file transfers/standby recovery and primary mounting. Version 1.1.6 has passed the host suite, a native VitaSDK build and static import checks; console testing is pending.
+Host checks: `sh tests/run_tests.sh`. These exercise control flow with mocked Vita APIs; they cannot prove hardware behavior, private firmware offsets or power-loss recovery. Original hardware reports confirmed secondary file transfers/standby recovery and primary mounting. Version 1.1.7 has passed the host suite, a native VitaSDK build and static import checks; console testing is pending.
 
 GPL-3.0-or-later; see [COPYING](COPYING) and [third-party notices](docs/THIRD_PARTY_NOTICES.md). Derived from USBMC by Yifan Lu and VitaShell storage code by TheFloW. Font and taiHEN SDK components retain their own licenses.
 
@@ -89,7 +89,8 @@ SHA-256 digest is installable. The app downloads over verified HTTPS, checks the
 digest, extracts into its own staging directory, checks ZIP CRCs and validates
 TITLE_ID, CONTENT_ID and APP_VER before handing off to a separate installer.
 The helper closes PSVSD/AM, installs the staged package and reopens PSVSD/AM.
-Its temporary bubble is removed on return when system promotion allows it.
+Its temporary bubble is removed when you choose Exit or Reboot, if system
+promotion allows removal. It can remain visible while this app stays open.
 Failures leave diagnostics in the app's update data; pre-install validation
 failures do not touch the live app. Keep power available during installation.
 
@@ -106,13 +107,10 @@ The separate main-storage preparation limitation below still applies. Release
 checks compare numeric versions, optionally prefixed by `v` or `v.`. Supported
 Vita APP_VER mapping is MAJOR.(MINOR*10+PATCH), with minor/patch each 0–9.
 
-Install 1.1.6 manually through VitaShell once if your existing updater stops at
-LiveArea or requires you to launch its installer manually. The old installed code
-controls that first handoff, so a new downloaded VPK cannot repair it in advance.
-For 1.1.6, install manually once even if your current app can launch the helper:
-1.1.5 reuses its own old installer, so that first update still runs the old code.
-From 1.1.6 onward the verified download supplies the installer, with matching
-title/version/content metadata checks. Same-version releases are not offered again.
+Version 1.1.6 and later select the installer from the verified download, so they
+can install 1.1.7 through the app after the release is published. Older versions
+that reuse their own helper may need a manual VitaShell installation once.
+Same-version releases are not offered again.
 
 The default/arbitrary system-date compatibility change is still pending. TLS
 certificate and hostname verification remain enabled. Installer handoff and
@@ -137,7 +135,7 @@ saved target. Missing original storage blocks Save instead of allowing an unsafe
 switch. Keep the original memory card inserted during this process.
 
 **One-time upgrade step for a system already using USB ux0:** install this revised
-1.1.6 build, leave the target at ux0 and use Save and Reboot once. That loads the
+1.1.7 build, leave the target at ux0 and use Save and Reboot once. That loads the
 updated boot plugin so it can capture the original storage. Then select uma0
 (or disable mounting) and Save and Reboot to perform the reverse copy. An old
 resident plugin cannot provide the new mapping information until rebooted.
@@ -154,53 +152,52 @@ are reported on screen. Offline skips remain silent.
 
 ### Bundled TLS — no iTLS-Enso requirement
 
-The current 1.1.6 build includes libcurl, Mbed TLS and a Mozilla CA bundle inside
+The current 1.1.7 build includes libcurl, Mbed TLS and a Mozilla CA bundle inside
 the VPK. Update checks no longer use the Vita's system HTTPS implementation.
 Users do not need to install iTLS-Enso or modify system certificates. TLS 1.2 or
 newer, certificate-chain validation and hostname verification remain required.
 The network feature still needs testing on the Vita; it does not change storage
 settings. If it fails, the Updates page includes a readable libcurl error reason.
 
-### Temporary installer cleanup
+### Focus and installer cleanup (1.1.7)
 
-Version 1.1.6 delays removal of the temporary installer until after the app has
-reopened, retries failures and discovers leftover installers on later launches.
-Cleanup is paused while an update or other busy operation is active. Failed
-cleanup is logged and retried next launch. The temporary helper is still used
-for installation, so its bubble may briefly appear during the handoff.
+The user confirmed that 1.1.6 opens the updated app but then sends it to the home
+screen while it remains running; reopening it manually stays in the app. This is
+a focus interruption, not a confirmed crash. The new app no longer destroys the
+helper at startup or schedules package removal after a two-second delay.
 
-### Artwork cache refresh (1.1.6)
+Shell-facing cleanup runs only when the user chooses Exit or Reboot, after any
+requested Save succeeds. It targets only the temporary installer, records errors,
+and clears its receipt/result files after successful removal. If removal fails,
+a later explicit Exit/Reboot can retry. The helper may remain visible until then.
+There is no idle cleanup scheduler or automatic retry loop.
 
-On launch, PSVSD/AM compares its icon and three LiveArea files against this title's
-`ur0:appmeta/RTPSV0001` copies. Changed files are staged, byte checked and replaced.
-It asks the system to replace this title's LiveArea from the installed assets.
-A pending marker preserves retry after failure; errors are recorded in Log.
-A version marker requests refresh at least once for each new release, even when
-promotion has already copied the source images. Unchanged successful copies
-within that release skip repeat work. This also runs after a storage change.
+### Artwork refresh (1.1.7)
 
-The user confirmed a full system restart displays the updated artwork. The home
-screen can retain its old rendered images in memory until that restart. The app
-now shows a restart notice after refreshing artwork. Use the existing Reboot menu
-when convenient; it never forces a restart or rebuilds the application database.
-Immediate in-memory home-screen refresh is not implemented.
+Startup only compares the four artwork files and version marker. That check does
+not write caches, load the LiveArea module or request system metadata changes.
+It shows a pending-artwork notice when necessary. Actual verified cache repair
+and LiveArea replacement are deferred to Exit/Reboot along with helper cleanup.
 
-### Updater display and confirmed return (1.1.6)
+The user confirmed that a full restart displays the current artwork. Choose
+Reboot to apply pending metadata and clear the home screen's retained images.
+The app never forces a restart, rebuilds the database or changes bubble layout.
 
-The helper uses two framebuffers, switching at vertical blank, paced at about
-30 fps. It never redraws the active scanout buffer. Installation runs on a worker
-while the shared interface remains visible; no installation percentage is invented.
+### Updater display and return
 
-The main-to-helper URI launch retains its confirmed-working process-start flag.
-Return uses an explicit title-ID launch, falling back to the URI only if that API
-reports failure. A per-attempt token is written before launch. The new main app
-draws its first frame, writes a matching startup receipt and closes only the
-temporary installer by title ID, since it can be suspended during the app switch.
-The helper waits up to 20 seconds for that receipt instead of exiting merely
-because a request was accepted. A timeout or API failure leaves the retry screen
-open. It does not automatically submit an accepted launch repeatedly.
+The helper keeps its two framebuffers. It now waits using the framebuffer-specific
+API and verifies the immediately presented buffer before allowing another render.
+A delayed flip keeps its buffers untouched; failed display calls are logged and
+retried without advancing the buffer state. A spare vertical blank paces drawing.
+These checks replace the assumption that one generic vblank completed each flip.
 
-The next main launch imports `ux0:data/PSVSD_Accessory/update/handoff.log` into Log.
-This records the helper version, promotion result and launch route. Delayed helper
-cleanup removes leftover handshake files after successful package removal.
-Vita testing of this revised return flow and flicker fix is still required.
+The confirmed-working title-ID return launch and per-attempt startup receipt are
+retained. The main app draws and acknowledges startup without closing the helper.
+The helper exits when it observes the receipt; if suspended, it can remain until
+explicit user Exit/Reboot cleanup. It still times out visibly when startup is not
+acknowledged and offers an explicit retry. Accepted launches are not resubmitted
+automatically. The next app launch imports update/handoff.log into Log.
+
+The focus and display fixes still require Vita confirmation. If focus is taken
+again, note the timing and export Log; the cleanup/LiveArea operations are no
+longer performed while you are using the app.

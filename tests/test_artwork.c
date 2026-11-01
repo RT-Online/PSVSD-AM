@@ -34,6 +34,9 @@ int main(void) {
     write_file("app0:sce_sys/livearea/contents/template.xml","template");
     write_file("app0:sce_sys/livearea/contents/bg.png","background");
     write_file("app0:sce_sys/livearea/contents/startup.png","startup");
+    assert(am_artwork_needs_refresh()==1 && !refreshes && !loads);
+    assert(access("ur0:data/PSVSD_Accessory/artwork-pending",F_OK)<0);
+    assert(access("ur0:appmeta/RTPSV0001",F_OK)<0);
     assert(am_artwork_refresh()==1);assert(refreshes==1 && loads==1 && unloads==1);
     check("ur0:appmeta/RTPSV0001/icon0.png","icon-new");check("ur0:appmeta/RTPSV0001/livearea/contents/startup.png","startup");
     assert(am_artwork_refresh()==0 && refreshes==1);
@@ -52,9 +55,9 @@ int main(void) {
     assert(remove("app0:sce_sys/icon0.png")==0);assert(am_artwork_refresh()<0 && refreshes==5);
     check("ur0:appmeta/RTPSV0001/icon0.png","third-icon");
     write_file("app0:sce_sys/icon0.png","third-icon");
-    write_file("ur0:data/PSVSD_Accessory/artwork-version","1.1.5");
+    write_file("ur0:data/PSVSD_Accessory/artwork-version","1.1.6");
     assert(am_artwork_refresh()==1 && refreshes==6);
-    check("ur0:data/PSVSD_Accessory/artwork-version","1.1.6");
+    check("ur0:data/PSVSD_Accessory/artwork-version","1.1.7");
     assert(am_artwork_refresh()==0 && refreshes==6);
     puts("Artwork: cache replacement, unchanged skip, retry, module ownership and missing source passed");return 0;
 }

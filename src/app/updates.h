@@ -28,9 +28,6 @@ typedef struct {
     int (*wifi)(void *ctx);
     int (*get)(void *ctx,char *body,size_t cap,size_t *used,int *http_status);
 } AmUpdateTransport;
-/* Retry temporary installer removal after it has had time to exit. */
-typedef struct { int pending,last_error;unsigned attempts;uint64_t next_try; } AmUpdateCleanup;
-int am_update_cleanup_tick(AmUpdateCleanup *state,uint64_t now,int busy,int (*remove_helper)(void *),void *context);
 int am_update_parse(const char *json,size_t size,const char *current,AmUpdate *out);
 void am_update_check_with_transport(AmUpdate *out,const char *current,const AmUpdateTransport *transport);
 void am_update_check(AmUpdate *out);

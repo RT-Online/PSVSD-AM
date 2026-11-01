@@ -219,10 +219,3 @@ void am_update_diagnostic(const AmUpdate *result,char *text,size_t cap) {
         result->reason,(unsigned)result->tls_verify,(unsigned)result->received);
 }
 
-int am_update_cleanup_tick(AmUpdateCleanup *s,uint64_t now,int busy,int (*remove_helper)(void *),void *context) {
-    if (!s->pending || busy || now<s->next_try) return 0;
-    s->last_error=remove_helper(context);++s->attempts;
-    if (s->last_error>=0) { s->pending=0;return 1; }
-    if (s->attempts>=8) { s->pending=0;return -1; }
-    s->next_try=now+2000000u;return 0;
-}
