@@ -16,7 +16,7 @@ Version **1.2.3** · Vita title ID **RTPSV0001** · Package version **01.23**
 - Storage-plugin conflict checks and backed-up configuration changes.
 - Verified copying of PSVSD/AM and VitaShell before switching to USB main storage.
 
-This uses the accessory interface; a reader connected only through the 3G slot needs the corresponding 3G storage software. Use one USB storage connection at a time.
+This uses the accessory interface; a reader connected only through the 3G slot needs the corresponding 3G storage plugin. Use one USB storage connection at a time.
 
 ## Installation
 
