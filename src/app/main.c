@@ -378,10 +378,16 @@ static int init_display(void) {
     return sceDisplaySetFrameBuf(&f,SCE_DISPLAY_SETBUF_NEXTFRAME);
 }
 int main(void) {
+    int migrated=am_migrate_data();
+    int resumed=am_update_relaunch_confirm();
+    /* The return request starts this process. Finish updating LiveArea before
+     * presenting the first frame or accepting input from the updated app. */
+    int cleanup=migrated>=0 && resumed>0?am_update_cleanup_installer_on_return():0;
+    if (cleanup==AM_INSTALLER_REMOVED) am_log("Removed temporary installer before first app frame.\n");
+    else if (cleanup==AM_INSTALLER_CLEANUP_DEFERRED) am_log("Temporary installer cleanup deferred.\n");
+    else if (cleanup<0) am_log("Temporary installer cleanup on return failed: %08X\n",(unsigned)cleanup);
     if (init_display()<0) return 1;
     draw();
-    int resumed=am_update_relaunch_confirm();
-    int migrated=am_migrate_data();
     int loaded=am_load_settings(&model.saved);model.pending=model.saved;
     if (loaded<0) snprintf(model.message,sizeof(model.message),"Settings unreadable; automatic mounting defaults off.");
     am_log("Data path migration: %08X\n",(unsigned)migrated);
@@ -424,13 +430,6 @@ int main(void) {
         am_log("Installer result: %s\n",result);
         if (!strcmp(result,"00000000")) snprintf(model.message,sizeof(model.message),artwork>0?"Update installed. Choose Reboot to refresh home-screen artwork.":"Update installed. Saved mount settings retained.");
         else snprintf(model.message,sizeof(model.message),"Update installation failed (%s). See Log.",result);
-    }
-    if (migrated>=0) {
-        int cleanup=am_update_cleanup_installer_on_launch();
-        if (cleanup==AM_INSTALLER_REMOVED) am_log("Removed temporary installer on startup.\n");
-        else if (cleanup==AM_INSTALLER_CLEANUP_DEFERRED) am_log("Temporary installer cleanup deferred.\n");
-        else if (cleanup<0) am_log("Temporary installer cleanup on startup failed: %08X\n",(unsigned)cleanup);
-        if (cleanup) refresh_log();
     }
     check_updates(1);
     unsigned previous=0,ticks=0;int exiting=0;

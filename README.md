@@ -4,9 +4,9 @@
 
 AI tools assisted with code development, documentation, and testing. RefurbedTech directed development and performed hardware testing.
 
-Version **1.2.8** · Vita title ID **RTPSV0001** · Package version **01.28**
+Version **1.2.9** · Vita title ID **RTPSV0001** · Package version **01.29**
 
-The launcher displays the `1.2` series. The app and update metadata show `1.2.8`.
+The launcher displays the `1.2` series. The app and update metadata show `1.2.9`.
 See [the Vita test guide](docs/UPDATE_TEST.md) for update, reboot and speed checks.
 
 ## Features
@@ -112,8 +112,9 @@ Left/Right or swipe to browse notes.
 The updater checks the VPK SHA-256 before extracting into its staging directory.
 It verifies ZIP CRCs and app and installer metadata before handing off to the
 temporary installer. The helper stops the previous PSVSD/AM process, promotes the
-staged package and requests that PSVSD/AM reopen. Save, Exit and Reboot can remove
-the temporary installer. Update failures appear in the log.
+staged package and requests that PSVSD/AM reopen. On the return from the
+installer, PSVSD/AM removes the installer bubble before drawing its first
+screen. Update and cleanup failures appear in the log.
 
 Downloads show transferred MiB and percentage when the total is known; unknown
 totals show an animated bar. Verification and extraction show their own progress.
@@ -130,8 +131,8 @@ monotonically increasing NN.NN package revision. Both app and helper carry
 AM_VERSION so installation validates the exact release tag and matching package.
 
 The installed version controls the launch of the temporary installer. The helper
-from the downloaded VPK controls the return. This allows an upgrade from 1.2.4
-to test the new return sequence.
+from the downloaded VPK controls the return. An in-app upgrade from 1.2.8
+exercises the new return sequence.
 
 ### Switching storage in either direction
 
@@ -174,18 +175,20 @@ validation. The app verifies the VPK against GitHub's release-asset SHA-256.
 
 ### Installer handoff
 
-Both directions use the two play-URI requests observed in AutoPlugin2 2.20.
-A successful request lets the current process exit. The installer logs both
-results and offers retry when both requests fail. A boot-relative timestamp
-records the return in the app log within five minutes.
+The handoff uses paired play-URI requests. The installer tries a direct return
+to PSVSD/AM and retries with the previous launch flags if both direct requests
+fail. A successful request lets the installer exit. The launch flags and
+results go into the log. A boot-relative timestamp identifies a recent return
+from the installer and enables one cleanup attempt before the first frame.
 
 ### Save and Reboot after an update
 
 When you keep the current storage mount, Save and Reboot commits settings,
 prepares the artwork cache through file I/O, and requests a cold reset.
-When PSVSD/AM starts, it removes the temporary installer bubble if the helper
-has exited and there is no staged install waiting. Exit and app-folder copying
-also perform installer cleanup. Full LiveArea artwork refresh runs on Exit.
+On return from an update, PSVSD/AM closes the installer title and removes its
+bubble before displaying the app. A staged update awaiting installation keeps
+its installer. Exit and app-folder copying can remove a leftover installer.
+Full LiveArea artwork refresh runs on Exit.
 
 ### Artwork and data folders
 

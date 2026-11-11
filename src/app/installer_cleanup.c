@@ -31,32 +31,37 @@ static int wait_for_helper_exit(void) {
     return running;
 }
 
-static int cleanup_installer(int startup) {
+static int cleanup_installer(int returning_from_update) {
     SceIoStat info;
     int present=sceIoGetstat(HELPER_EXECUTABLE,&info);
     if (present<0) return (unsigned)present==FILE_NOT_FOUND?0:present;
-    if (startup) {
+    if (returning_from_update) {
         int ready=sceIoGetstat(AM_UPDATE_ROOT "/ready",&info);
         if (ready>=0) return AM_INSTALLER_CLEANUP_DEFERRED;
         if ((unsigned)ready!=FILE_NOT_FOUND) return ready;
     }
-    /* The helper normally exits after handing off to the updated app. */
+    /* Let the helper finish the accepted handoff before closing its title. */
     int running=wait_for_helper_exit();
-    if (running!=0) {
-        if (startup) return running>0?AM_INSTALLER_CLEANUP_DEFERRED:running;
+    if (returning_from_update || running!=0) {
+        /* Ask AppMgr to close only the installer before updating LiveArea,
+         * even if the process has already exited during this handoff. */
         int stopped=sceAppMgrDestroyAppByName(HELPER_TITLE);
         if (stopped<0 && (unsigned)stopped!=AM_APPMGR_NOT_RUNNING) return stopped;
-        if (stopped>=0 && wait_for_helper_exit()>0) return (int)SCE_APPMGR_ERROR_BUSY;
+        if (stopped>=0) {
+            running=wait_for_helper_exit();
+            if (running!=0) return running<0?running:(int)SCE_APPMGR_ERROR_BUSY;
+        }
     }
-    int ret=am_package_remove_helper(startup);
+    int ret=am_package_remove_helper();
     if (ret<0) return ret;
     for (unsigned i=0;i<=CLEANUP_POLLS;++i) {
         present=sceIoGetstat(HELPER_EXECUTABLE,&info);
         if (present<0) {
             if ((unsigned)present!=FILE_NOT_FOUND) return present;
+            if (returning_from_update) return AM_INSTALLER_REMOVED;
             remove(AM_UPDATE_ROOT "/result");
             am_update_relaunch_cancel();
-            return startup?AM_INSTALLER_REMOVED:0;
+            return 0;
         }
         if (i<CLEANUP_POLLS) sceKernelDelayThread(CLEANUP_POLL_US);
     }
@@ -64,4 +69,4 @@ static int cleanup_installer(int startup) {
 }
 
 int am_update_cleanup_installer(void) { return cleanup_installer(0); }
-int am_update_cleanup_installer_on_launch(void) { return cleanup_installer(1); }
+int am_update_cleanup_installer_on_return(void) { return cleanup_installer(1); }
