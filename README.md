@@ -4,15 +4,16 @@
 
 AI tools assisted with code development, documentation, and testing. RefurbedTech directed development and performed hardware testing.
 
-Version **1.2.5** · Vita title ID **RTPSV0001** · Package version **01.25**
+Version **1.2.6** · Vita title ID **RTPSV0001** · Package version **01.26**
 
-The launcher displays the `1.2` series. The app and update metadata show `1.2.5`.
-See [the updater test](docs/UPDATE_TEST.md) for the Vita handoff and clock notice checks.
+The launcher displays the `1.2` series. The app and update metadata show `1.2.6`.
+See [the Vita test guide](docs/UPDATE_TEST.md) for update, reboot and speed checks.
 
 ## Features
 
 - Automatic mounting as `uma0:` extra storage or `ux0:` main storage.
 - Manual secondary mounting and a 4 MiB read/write verification test.
+- Sequential and 4 KiB random read/write benchmarks on the verified PSVSD mount.
 - Event-driven standby recovery for the owned USB mapping.
 - Touch and controller navigation, diagnostic export, and confirmed log clearing.
 - On-demand GitHub release checks, with Wi-Fi detection and paged release notes.
@@ -44,6 +45,15 @@ backgrounds, with original text colors. An underline indicates selection;
 actions and default Cancel choices are unchanged.
 
 Use the sidebar or D-pad to navigate. Cross activates choices; Circle/Back returns to the previous menu and never exits the app. Reboot and Exit each offer a save option and a proceed-without-save option. Square exports the report. On Log, Triangle opens Clear Log with Cancel selected by default.
+
+## Read / write test
+
+Choose **Verify** or press Cross to write and check a 4 MiB file. Choose
+**Speed Test** or press Triangle to measure the mounted PSVSD. Speed Test uses
+a temporary 32 MiB file, reports sequential MiB/s and measures 512 aligned
+4 KiB operations per random pass. Random results show MiB/s and IOPS. Each
+write pass includes one final flush. Read rates may include system and card
+caching. Results are shown on the page and saved in Log.
 
 ## Configuration and recovery
 
@@ -171,10 +181,10 @@ records the return in the app log within five minutes.
 
 ### Save and Reboot after an update
 
-Save verifies the app copies and commits settings before reboot. Reboot prepares
-the artwork cache through file I/O, requests temporary installer cleanup and
-then requests a cold reset. The log records the returned codes. Full LiveArea
-refresh runs on Exit.
+Save and Reboot lets the temporary updater exit and confirms removal of the
+helper before any app-folder copying. After committing settings, it prepares
+the artwork cache through file I/O and requests a cold reset. The log records
+cleanup, artwork preparation and reset. Full LiveArea refresh runs on Exit.
 
 ### Artwork and data folders
 

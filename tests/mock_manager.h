@@ -4,6 +4,8 @@
 #include <stdio.h>
 #define SCE_O_APPEND O_APPEND
 #define SCE_O_EXCL O_EXCL
+#define SCE_O_RDWR O_RDWR
+#define SCE_SEEK_SET SEEK_SET
 #define SCE_SEEK_END SEEK_END
 #define SCE_S_ISDIR(m) S_ISDIR(m)
 #define SCE_S_ISREG(m) S_ISREG(m)
@@ -13,6 +15,10 @@ int sceIoDread(int,SceIoDirent *);
 int sceIoDclose(int);
 int sceIoRmdir(const char *);
 int64_t sceIoLseek(int,int64_t,int);
+int sceIoPread(int,void *,size_t,int64_t);
+int sceIoPwrite(int,const void *,size_t,int64_t);
 int sceIoSync(const char *,unsigned);
+int sceIoSyncByFd(int,int);
+int64_t sceKernelGetSystemTimeWide(void);
 int _vshKernelSearchModuleByName(const char *,const void *);
 #endif

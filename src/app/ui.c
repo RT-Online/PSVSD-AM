@@ -168,18 +168,73 @@ static void settings(const AmUi *m) {
        "Save copies and verifies PSVSD/AM and VitaShell on USB.\nCopy other apps and saves separately.":
        "uma0 keeps your current main storage.\nDisabling takes effect after reboot; manual tests remain available.",610,2,0,MUTED);
 }
+static void speed_results(const AmSpeedResult *r) {
+    const int read_col=513,write_col=702;
+    char value[96];
+    text(296,269,1,TEXT,"Speed Test results");
+    snprintf(value,sizeof(value),"PSVSD %s",am_target_name(r->target));
+    text(884-width(value,0),273,0,ACCENT,value);
+    text(read_col,305,0,MUTED,"Read");
+    text(write_col,305,0,MUTED,"Write");
+    text(296,329,0,TEXT,"Sequential");
+    text(296,353,0,TEXT,"Random 4 KiB");
+    text(296,377,0,TEXT,"Random IOPS");
+    const unsigned seq[]={AM_SPEED_SEQ_READ,AM_SPEED_SEQ_WRITE};
+    const unsigned random[]={AM_SPEED_RANDOM_READ,AM_SPEED_RANDOM_WRITE};
+    for (unsigned col=0;col<2;++col) {
+        int x=col?write_col:read_col;
+        snprintf(value,sizeof(value),"%.2f MiB/s",r->rates[seq[col]].mib_s);
+        text(x,329,0,TEXT,value);
+        snprintf(value,sizeof(value),"%.2f MiB/s",r->rates[random[col]].mib_s);
+        text(x,353,0,TEXT,value);
+        snprintf(value,sizeof(value),"%.0f",r->rates[random[col]].iops);
+        text(x,377,0,TEXT,value);
+    }
+    text(296,413,0,MUTED,"Reads may be cached. Writes include a flush.");
+}
 static void test_view(const AmUi *m) {
-    title("Read / write test","A 4 MiB file is written, read back, checked, then removed.");
-    round_rect(276,211,628,157,14,CARD);
-    const char *label=m->busy?m->stage:m->test_attempted?(m->test_passed?"Verification passed":"Test needs attention"):"Ready when you are";
-    text(296,230,1,m->test_attempted&&!m->test_passed?BAD:TEXT,label);
-    char b[160];snprintf(b,sizeof(b),"Written %.2f MiB   |   Read %.2f MiB",m->test.written/1048576.0,m->test.read/1048576.0);text(296,277,0,MUTED,b);
-    round_rect(296,322,588,8,4,BORDER);round_rect(296,322,(int)(588*m->progress/100),8,4,ACCENT);
-    if (m->test_attempted && !m->busy) snprintf(b,sizeof(b),"CRC32 %08X   |   Result %08X",m->test.crc,(unsigned)m->test.result);
-    else snprintf(b,sizeof(b),"%s",m->busy?"Verification in progress":"No verification result yet");
-    text(282,372,0,MUTED,b);
-    button(AM_TEST_X,AM_TEST_Y,AM_TEST_W,AM_TEST_H,"Run test",!m->busy);
-    wrapped(282,414,"X verifies USB storage. Your live ux0 mapping is kept.",600,1,0,MUTED);
+    title("Read / write test","X runs the 4 MiB verification. Triangle starts Speed Test.");
+    button(AM_TEST_X,AM_TEST_Y,AM_TEST_W,AM_TEST_H,"Verify",!m->busy);
+    button(AM_SPEED_TEST_X,AM_TEST_Y,AM_TEST_W,AM_TEST_H,"Speed Test",!m->busy);
+    char value[120];
+    if (m->busy && !m->speed_active) {
+        round_rect(276,211,628,157,14,CARD);
+        text(296,230,1,TEXT,m->stage);
+        snprintf(value,sizeof(value),"Written %.2f MiB   |   Read %.2f MiB",m->test.written/1048576.0,m->test.read/1048576.0);
+        text(296,277,0,MUTED,value);
+        round_rect(296,322,588,8,4,BORDER);
+        round_rect(296,322,(int)(588*m->progress/100),8,4,ACCENT);
+        return;
+    }
+    round_rect(276,204,628,45,12,CARD);
+    text(296,215,0,TEXT,"4 MiB verification");
+    if (m->test_attempted) {
+        snprintf(value,sizeof(value),m->test_passed?"Passed   |   CRC32 %08X":"Failed   |   %08X",
+                 m->test_passed?m->test.crc:(unsigned)m->test.result);
+        text(884-width(value,0),215,0,m->test_passed?ACCENT:BAD,value);
+    } else text(884-width("Ready",0),215,0,MUTED,"Ready");
+    round_rect(276,260,628,178,12,CARD);
+    if (m->speed_active) {
+        const char *phases[]={"Sequential write","Sequential read","Random 4 KiB read","Random 4 KiB write"};
+        unsigned percent=m->speed_progress;
+        unsigned phase=percent/AM_SPEED_PHASE_PERCENT;
+        text(296,274,1,ACCENT,phase<AM_SPEED_PHASE_COUNT?phases[phase]:"Preparing Speed Test");
+        if (phase>=AM_SPEED_PHASE_COUNT) percent=0;
+        snprintf(value,sizeof(value),"%u%%",percent);
+        text(884-width(value,1),274,1,TEXT,value);
+        round_rect(296,333,588,10,4,BORDER);
+        round_rect(296,333,(int)(588*percent/100),10,4,ACCENT);
+        text(296,378,0,MUTED,"Leave PSVSD/AM open until the test finishes.");
+    } else if (m->speed_attempted && m->speed.result>=0) speed_results(&m->speed);
+    else if (m->speed_attempted) {
+        text(296,274,1,BAD,"Speed Test failed");
+        snprintf(value,sizeof(value),"Error %08X. Open Log for details.",(unsigned)m->speed.result);
+        text(296,325,0,MUTED,value);
+    } else {
+        text(296,274,1,TEXT,"Sequential and random I/O");
+        snprintf(value,sizeof(value),"Speed Test uses a temporary %u MiB file on PSVSD.",AM_SPEED_FILE_MIB);
+        text(296,325,0,MUTED,value);
+    }
 }
 static void log_view(const AmUi *m) {
     char count[80];unsigned pages=am_ui_log_pages(m->log);snprintf(count,sizeof(count),"Page %u of %u   |   LEFT / RIGHT to browse",m->log_page+1,pages);

@@ -35,6 +35,7 @@ int am_ui_input(AmUi *m,unsigned keys) {
     if ((keys&AM_TRIANGLE) && m->nav==VIEW_LOG) {
         m->clear_confirm=1;m->clear_choice=1;m->message[0]=0;return ACTION_NONE;
     }
+    if ((keys&AM_TRIANGLE) && m->nav==VIEW_TEST) return ACTION_SPEED_TEST;
     if (keys&AM_SQUARE) return ACTION_EXPORT;
     if (m->editing && (m->nav==VIEW_REBOOT || m->nav==VIEW_EXIT)) {
         if (keys&(AM_UP|AM_DOWN)) { m->field^=1;return ACTION_NONE; }

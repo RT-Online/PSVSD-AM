@@ -24,6 +24,11 @@ static int write_all(int fd,const void *p,size_t n) {
     while (n) { int r=sceIoWrite(fd,b,n);if (r<=0) return r<0?r:IO_ERROR;b+=r;n-=r; }
     return 0;
 }
+static int read_all(int fd,void *p,size_t n) {
+    unsigned char *b=p;
+    while (n) { int r=sceIoRead(fd,b,n);if (r<=0) return r<0?r:IO_ERROR;b+=r;n-=r; }
+    return 0;
+}
 int am_read_text(const char *path,char *out,size_t cap) {
     if (!cap) return IO_ERROR;
     int fd=sceIoOpen(path,SCE_O_RDONLY,0);if (fd<0) { out[0]=0;return fd; }
@@ -453,21 +458,26 @@ static void pattern(unsigned char *p,size_t n,uint32_t offset) {
     uint32_t v=0xA8355EEDu^offset;
     for (size_t i=0;i<n;++i) { v^=v<<13;v^=v>>17;v^=v<<5;p[i]=(unsigned char)v; }
 }
-int am_test_io(int target,AmTestResult *r,AmProgress progress,void *ctx) {
-    memset(r,0,sizeof(*r));r->result=-1;
+static int open_test_file(int target,const char *prefix,int mode,char *path,size_t cap) {
     AmStatus status;am_status(&status);
-    if (!status.verified_mount || status.actual_target!=target) return r->result;
+    if (!status.verified_mount || status.actual_target!=target) return -1;
     char dir[80];snprintf(dir,sizeof(dir),"%sdata",am_target_name(target));
-    int ret=mkdir_ok(dir);if (ret<0) return r->result=ret;
+    int ret=mkdir_ok(dir);if (ret<0) return ret;
     snprintf(dir,sizeof(dir),"%sdata/PSVSD_AM",am_target_name(target));
-    ret=mkdir_ok(dir);if (ret<0) return r->result=ret;
+    ret=mkdir_ok(dir);if (ret<0) return ret;
     int fd=-1;uint32_t token=sceKernelGetProcessTimeLow();
     for (unsigned i=0;i<8;++i) {
-        snprintf(r->path,sizeof(r->path),"%s/verify-%08X.bin",dir,token+i);
-        fd=sceIoOpen(r->path,SCE_O_WRONLY|SCE_O_CREAT|SCE_O_EXCL,0666);
+        snprintf(path,cap,"%s/%s-%08X.bin",dir,prefix,token+i);
+        fd=sceIoOpen(path,mode|SCE_O_CREAT|SCE_O_EXCL,0666);
         if (fd!=EEXIST_VALUE) break;
     }
+    return fd;
+}
+int am_test_io(int target,AmTestResult *r,AmProgress progress,void *ctx) {
+    memset(r,0,sizeof(*r));
+    int fd=open_test_file(target,"verify",SCE_O_WRONLY,r->path,sizeof(r->path));
     if (fd<0) return r->result=fd;
+    int ret=0;
     enum { CHUNK=16384, TOTAL=4*1024*1024 };
     unsigned char data[CHUNK],expected[CHUNK];uint32_t write_crc=0xFFFFFFFFu,read_crc=0xFFFFFFFFu;
     for (uint32_t off=0;off<TOTAL;off+=CHUNK) {
@@ -481,9 +491,7 @@ int am_test_io(int target,AmTestResult *r,AmProgress progress,void *ctx) {
         fd=sceIoOpen(r->path,SCE_O_RDONLY,0);if (fd<0) ret=fd;
         else {
             for (uint32_t off=0;off<TOTAL;off+=CHUNK) {
-                size_t used=0;int n=0;
-                while (used<CHUNK && (n=sceIoRead(fd,data+used,CHUNK-used))>0) used+=n;
-                if (used!=CHUNK) { ret=n<0?n:IO_ERROR;break; }
+                ret=read_all(fd,data,CHUNK);if (ret<0) break;
                 pattern(expected,CHUNK,off);if (memcmp(data,expected,CHUNK)) { ret=IO_ERROR;break; }
                 r->read+=CHUNK;read_crc=crc_update(read_crc,data,CHUNK);
                 if (progress && !(off%(CHUNK*16))) progress(50+(unsigned)(50ull*r->read/TOTAL),"Verifying file contents",ctx);
@@ -501,6 +509,98 @@ int am_test_io(int target,AmTestResult *r,AmProgress progress,void *ctx) {
     if (progress) progress(100,ret>=0?"Read/write verification passed":"Test failed - see log",ctx);
     return ret;
 }
+
+enum { SPEED_MIB=1024*1024,SPEED_FILE_BYTES=AM_SPEED_FILE_MIB*SPEED_MIB,
+       SPEED_SEQ_BLOCK=128*1024,SPEED_RANDOM_BLOCK=4096,SPEED_RANDOM_OPS=512 };
+
+static int measure_speed(int fd,unsigned phase,unsigned char *data,const uint16_t *pages,
+                         AmSpeedRate *rate,AmSpeedProgress progress,void *ctx) {
+    const int random=phase==AM_SPEED_RANDOM_READ || phase==AM_SPEED_RANDOM_WRITE;
+    const int writing=phase==AM_SPEED_SEQ_WRITE || phase==AM_SPEED_RANDOM_WRITE;
+    const unsigned block=random?SPEED_RANDOM_BLOCK:SPEED_SEQ_BLOCK;
+    const unsigned count=random?SPEED_RANDOM_OPS:SPEED_FILE_BYTES/SPEED_SEQ_BLOCK;
+    if (phase==AM_SPEED_SEQ_READ) {
+        int64_t position=sceIoLseek(fd,0,SCE_SEEK_SET);
+        if (position!=0) return position<0?(int)position:IO_ERROR;
+    }
+    if (progress) progress(phase*AM_SPEED_PHASE_PERCENT,ctx);
+    int64_t started=sceKernelGetSystemTimeWide();
+    if (started<0) return IO_ERROR;
+    for (unsigned i=0;i<count;++i) {
+        if (random) {
+            int64_t offset=(int64_t)pages[i]*SPEED_RANDOM_BLOCK;
+            int bytes=writing?sceIoPwrite(fd,data,block,offset):sceIoPread(fd,data,block,offset);
+            if (bytes!=(int)block) return bytes<0?bytes:IO_ERROR;
+        } else {
+            int ret=writing?write_all(fd,data,block):read_all(fd,data,block);
+            if (ret<0) return ret;
+        }
+        if (progress && (i+1)%16==0)
+            progress(phase*AM_SPEED_PHASE_PERCENT+(AM_SPEED_PHASE_PERCENT-1)*(i+1)/count,ctx);
+    }
+    if (writing) {
+        int ret=sceIoSyncByFd(fd,0);
+        if (ret<0) return ret;
+    }
+    int64_t finished=sceKernelGetSystemTimeWide();
+    if (finished<=started) return IO_ERROR;
+    double seconds=(finished-started)/1000000.0;
+    rate->mib_s=(double)count*block/(SPEED_MIB*seconds);
+    if (random) rate->iops=count/seconds;
+    return 0;
+}
+
+int am_speed_test(int target,AmSpeedResult *r,AmSpeedProgress progress,void *ctx) {
+    memset(r,0,sizeof(*r));r->target=target;
+    unsigned char *data=malloc(SPEED_SEQ_BLOCK);
+    if (!data) {
+        am_log("Speed Test could not allocate the I/O buffer.\n");
+        return r->result=IO_ERROR;
+    }
+    int fd=open_test_file(target,"speed",SCE_O_RDWR,r->path,sizeof(r->path));
+    if (fd<0) {
+        am_log("Speed Test file setup failed on %s (%08X).\n",am_target_name(target),(unsigned)fd);
+        free(data);return r->result=fd;
+    }
+
+    /* The generator visits all pages before repeating in the power-of-two file. */
+    uint16_t pages[2*SPEED_RANDOM_OPS];
+    uint32_t random=0x41C64E6Du;
+    for (unsigned i=0;i<2*SPEED_RANDOM_OPS;++i) {
+        random=random*1664525u+1013904223u;
+        pages[i]=(uint16_t)(random%(SPEED_FILE_BYTES/SPEED_RANDOM_BLOCK));
+    }
+    pattern(data,SPEED_SEQ_BLOCK,0);
+    unsigned phase=0;
+    int ret=0;
+    for (;phase<AM_SPEED_PHASE_COUNT;++phase) {
+        const uint16_t *offsets=pages;
+        if (phase==AM_SPEED_RANDOM_WRITE) {
+            offsets+=SPEED_RANDOM_OPS;
+            pattern(data,SPEED_RANDOM_BLOCK,SPEED_FILE_BYTES);
+        }
+        ret=measure_speed(fd,phase,data,offsets,&r->rates[phase],progress,ctx);
+        if (ret<0) break;
+    }
+    int closed=sceIoClose(fd);
+    free(data);
+    if (ret>=0 && closed<0) ret=closed;
+    r->cleanup_result=sceIoRemove(r->path);
+    if (ret>=0 && r->cleanup_result<0) ret=r->cleanup_result;
+    r->result=ret;
+    am_log("Speed Test %s, %s: phases=%u/%u close=%08X cleanup=%08X result=%08X\n",
+           am_target_name(target),r->path,phase,(unsigned)AM_SPEED_PHASE_COUNT,
+           (unsigned)closed,(unsigned)r->cleanup_result,(unsigned)ret);
+    if (ret>=0) {
+        am_log("Sequential read %.2f MiB/s, write %.2f MiB/s (flushed)\n",
+               r->rates[AM_SPEED_SEQ_READ].mib_s,r->rates[AM_SPEED_SEQ_WRITE].mib_s);
+        am_log("4 KiB random read %.2f MiB/s (%.0f IOPS), write %.2f MiB/s (%.0f IOPS, flushed). Reads may be cached.\n",
+               r->rates[AM_SPEED_RANDOM_READ].mib_s,r->rates[AM_SPEED_RANDOM_READ].iops,
+               r->rates[AM_SPEED_RANDOM_WRITE].mib_s,r->rates[AM_SPEED_RANDOM_WRITE].iops);
+    }
+    return ret;
+}
+
 int am_clear_logs(char *message,size_t cap) {
     if (!cap) return IO_ERROR;
     /* Fixed diagnostic-only paths. Runtime query tokens, settings, tai files,

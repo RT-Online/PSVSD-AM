@@ -38,10 +38,11 @@ int am_ui_tap(AmUi *ui,int x,int y);
 #define AM_CONFIRM_H 62
 #define AM_DATE_OK_X 501
 #define AM_DATE_OK_W 180
-#define AM_TEST_X 726
-#define AM_TEST_Y 362
-#define AM_TEST_W 178
-#define AM_TEST_H 43
+#define AM_TEST_X 572
+#define AM_SPEED_TEST_X 744
+#define AM_TEST_Y 126
+#define AM_TEST_W 160
+#define AM_TEST_H 42
 #define AM_CHOICE_X 276
 #define AM_CHOICE_Y 214
 #define AM_CHOICE_W 628

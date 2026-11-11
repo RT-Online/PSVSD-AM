@@ -21,7 +21,10 @@ int main(void) {
     tap(&m,&s,600,330);assert(m.pending.target==AM_UX0);
     assert(tap(&m,&s,850,520)==ACTION_NONE && !m.editing);
     reset(&m,&s);tap(&m,&s,100,230);assert(m.nav==VIEW_TEST);
-    assert(tap(&m,&s,800,400)==ACTION_TEST);
+    assert(tap(&m,&s,AM_TEST_X+AM_TEST_W/2,AM_TEST_Y+AM_TEST_H/2)==ACTION_TEST);
+    assert(tap(&m,&s,AM_SPEED_TEST_X+AM_TEST_W/2,AM_TEST_Y+AM_TEST_H/2)==ACTION_SPEED_TEST);
+    m.busy=1;
+    assert(tap(&m,&s,AM_SPEED_TEST_X+AM_TEST_W/2,AM_TEST_Y+AM_TEST_H/2)==ACTION_NONE);
     reset(&m,&s);tap(&m,&s,100,405);assert(m.nav==VIEW_REBOOT);
     assert(tap(&m,&s,600,240)==ACTION_SAVE_REBOOT);
     assert(tap(&m,&s,600,315)==ACTION_REBOOT);

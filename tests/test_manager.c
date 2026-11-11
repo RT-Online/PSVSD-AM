@@ -34,6 +34,11 @@ static struct {
     int source_change,tai_change,boot_change,yamt_change,lose_usb;
     int add_source,add_destination,fail_rollback;
     int request_calls,request_error,request_no_mount;
+    int speed_syncs,speed_fail_sync,speed_short_read,speed_full;
+    unsigned speed_writes,speed_reads,speed_preads,speed_pwrites;
+    unsigned speed_percent;
+    int64_t speed_clock;
+    unsigned char speed_pages[SPEED_FILE_BYTES/SPEED_RANDOM_BLOCK];
 } cfg;
 static int err(void) { return (int)(0x80010000u|(unsigned)errno); }
 static char *mapped(const char *p,char out[512]) { snprintf(out,512,"%s/%s",root,p);return out; }
@@ -60,6 +65,10 @@ int sceIoClose(int fd) {
 int sceIoRead(int fd,void *p,size_t n) {
     if (cfg.partial && n>513) n=513;
     int ret=(int)read(fd,p,n);
+    if (strstr(fd_paths[fd],"/speed-")) {
+        assert(cfg.speed_syncs==1 && n<=SPEED_SEQ_BLOCK);
+        ++cfg.speed_reads;cfg.speed_clock+=1000;
+    }
     if (ret>0 && cfg.corrupt && strstr(fd_paths[fd],"verify-")) { ((unsigned char *)p)[0]^=1;cfg.corrupt=0; }
     if (ret>0 && cfg.copy_corrupt && strstr(fd_paths[fd],"/prepare-") && strstr(fd_paths[fd],"/new/")) { ((unsigned char *)p)[0]^=1;cfg.copy_corrupt=0; }
     if (ret>0 && cfg.final_corrupt && !strncmp(fd_paths[fd],"uma0:app/",9)) { ((unsigned char *)p)[0]^=1;cfg.final_corrupt=0; }
@@ -71,6 +80,11 @@ int sceIoWrite(int fd,const void *p,size_t n) {
     if (cfg.full && strstr(fd_paths[fd],"verify-") && lseek(fd,0,SEEK_CUR)>=32768) return (int)0x8001001C;
     if (cfg.copy_full && strstr(fd_paths[fd],"/prepare-") && strstr(fd_paths[fd],"/new/") && lseek(fd,0,SEEK_CUR)>=32768) return (int)0x8001001C;
     if (cfg.zero_copy_write && strstr(fd_paths[fd],"/prepare-") && strstr(fd_paths[fd],"/new/")) return 0;
+    if (strstr(fd_paths[fd],"/speed-")) {
+        assert(!cfg.speed_syncs && n<=SPEED_SEQ_BLOCK);
+        if (cfg.speed_full && cfg.speed_writes) return (int)0x8001001C;
+        ++cfg.speed_writes;cfg.speed_clock+=1000;
+    }
     if (cfg.partial && n>513) n=513;
     int r=(int)write(fd,p,n);return r<0?err():r;
 }
@@ -103,6 +117,32 @@ int sceIoDclose(int fd) { assert(fd<2048 && dir_handles[fd]);DIR *d=dir_handles[
 int sceIoRmdir(const char *p) { char path[512];return rmdir(mapped(p,path))<0?err():0; }
 int64_t sceIoLseek(int fd,int64_t off,int whence) { return lseek(fd,off,whence); }
 int sceIoSync(const char *p,unsigned flags) { assert((!strcmp(p,"uma0:")||!strcmp(p,"ux0:")) && !flags);return cfg.sync_fail?(int)0x80010005:0; }
+static void check_speed_offset(int fd,size_t n,int64_t offset) {
+    assert(strstr(fd_paths[fd],"/speed-") && cfg.speed_syncs==1);
+    assert(n==SPEED_RANDOM_BLOCK && offset>=0 && offset<SPEED_FILE_BYTES && offset%SPEED_RANDOM_BLOCK==0);
+    assert(!cfg.speed_pages[offset/SPEED_RANDOM_BLOCK]);
+    cfg.speed_pages[offset/SPEED_RANDOM_BLOCK]=1;
+    cfg.speed_clock+=1000;
+}
+int sceIoPread(int fd,void *p,size_t n,int64_t offset) {
+    check_speed_offset(fd,n,offset);
+    ++cfg.speed_preads;
+    int ret=(int)pread(fd,p,cfg.speed_short_read?n-1:n,offset);
+    return ret<0?err():ret;
+}
+int sceIoPwrite(int fd,const void *p,size_t n,int64_t offset) {
+    check_speed_offset(fd,n,offset);
+    assert(cfg.speed_preads==SPEED_RANDOM_OPS);
+    ++cfg.speed_pwrites;
+    int ret=(int)pwrite(fd,p,n,offset);
+    return ret<0?err():ret;
+}
+int sceIoSyncByFd(int fd,int flag) {
+    assert(strstr(fd_paths[fd],"/speed-") && !flag);
+    cfg.speed_clock+=244000;
+    return ++cfg.speed_syncs==cfg.speed_fail_sync?(int)0x80010005:0;
+}
+int64_t sceKernelGetSystemTimeWide(void) { return cfg.speed_clock; }
 uint32_t sceKernelGetProcessTimeLow(void) { return 0x11223344; }
 int _vshKernelSearchModuleByName(const char *name,const void *work) {
     assert(work);
@@ -127,6 +167,40 @@ static void reset(void) {
 }
 static void progress_cb(unsigned n,const char *stage,void *p) {
     (void)p;assert(stage && n>=cfg.last_percent && n<=100);cfg.last_percent=n;++progress_calls;
+}
+static void speed_progress_cb(unsigned percent,void *ctx) {
+    (void)ctx;assert(percent>=cfg.speed_percent && percent<100);cfg.speed_percent=percent;
+}
+static void test_speed(void) {
+    AmSpeedResult result;
+    reset();assert(am_speed_test(AM_UMA0,&result,speed_progress_cb,NULL)==0);
+    assert(result.target==AM_UMA0 && !result.cleanup_result && !local_exists(result.path));
+    assert(cfg.speed_writes==SPEED_FILE_BYTES/SPEED_SEQ_BLOCK && cfg.speed_reads==cfg.speed_writes);
+    assert(cfg.speed_preads==SPEED_RANDOM_OPS && cfg.speed_pwrites==SPEED_RANDOM_OPS && cfg.speed_syncs==2);
+    assert(result.rates[AM_SPEED_SEQ_WRITE].mib_s==64 && result.rates[AM_SPEED_SEQ_READ].mib_s==125);
+    assert(result.rates[AM_SPEED_RANDOM_READ].iops==1000 && result.rates[AM_SPEED_RANDOM_READ].mib_s==3.90625);
+    assert(result.rates[AM_SPEED_RANDOM_WRITE].iops>677 && result.rates[AM_SPEED_RANDOM_WRITE].iops<678);
+    assert(result.rates[AM_SPEED_RANDOM_WRITE].mib_s>2.64 && result.rates[AM_SPEED_RANDOM_WRITE].mib_s<2.65);
+    assert(cfg.speed_percent==99);
+    reset();assert(am_speed_test(AM_UX0,&result,NULL,NULL)<0 && !local_exists("ux0:data/PSVSD_AM"));
+    reset();cfg.speed_full=1;
+    assert(am_speed_test(AM_UMA0,&result,NULL,NULL)==(int)0x8001001C && !local_exists(result.path) && !cfg.speed_syncs);
+    reset();cfg.speed_fail_sync=1;
+    assert(am_speed_test(AM_UMA0,&result,NULL,NULL)<0 && !local_exists(result.path) && !cfg.speed_reads);
+    reset();cfg.speed_fail_sync=2;
+    assert(am_speed_test(AM_UMA0,&result,NULL,NULL)<0 && !local_exists(result.path) && cfg.speed_syncs==2);
+    reset();cfg.speed_short_read=1;
+    assert(am_speed_test(AM_UMA0,&result,NULL,NULL)<0 && !local_exists(result.path) && !cfg.speed_pwrites);
+    reset();
+    put(ACCESSORY_KERNEL_DIR "/runtime.txt","PSVSD/AM " ACCESSORY_VERSION "\nRequest: 00001234\nMount: ux0:\n");
+    char dir[512],out[65536];
+    assert(!mkdir(mapped("ux0:data/PSVSD_AM",dir),0700));
+    const char *existing="ux0:data/PSVSD_AM/speed-11223344.bin";
+    put(existing,"KEEP");
+    assert(am_speed_test(AM_UX0,&result,NULL,NULL)==0 && result.target==AM_UX0);
+    assert(strcmp(result.path,existing) && !local_exists(result.path));
+    get(existing,out);assert(!strcmp(out,"KEEP"));
+    puts("Speed Test: mount selection, aligned distinct offsets, flush timing, failure cleanup and collision handling passed");
 }
 static void prepare_main(void) {
     char path[512];const char *dirs[]={"uma0:app","uma0:app/RTPSV0001","uma0:app/VITASHELL",
@@ -249,6 +323,7 @@ int main(void) {
     assert(am_test_io(AM_UMA0,&r,NULL,NULL)==EEXIST_VALUE);get(r.path,out);assert(!strcmp(out,"KEEP"));
     reset();put(ACCESSORY_KERNEL_DIR "/runtime.txt","PSVSD/AM " ACCESSORY_VERSION "\nRequest: 00001234\nMount: ux0:\n");
     assert(am_test_io(AM_UX0,&r,NULL,NULL)==0 && r.read==4*1024*1024);
+    test_speed();
     reset();put(ACCESSORY_KERNEL_LOG,"KERNEL RESULT\n");am_log("APPLICATION RESULT\n");
     assert(am_export_report("EXTRA",message,sizeof(message))==0);get(ACCESSORY_USER_LOG,out);
     assert(strstr(out,"KERNEL RESULT") && strstr(out,"APPLICATION RESULT") && strstr(out,"EXTRA"));

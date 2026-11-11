@@ -56,7 +56,10 @@ int am_ui_tap(AmUi *m,int x,int y) {
     if (m->nav==VIEW_SETTINGS && inside(x,y,276,300,628,72)) {
         m->editing=1;m->field=1;return am_ui_input(m,AM_CROSS);
     }
-    if (m->nav==VIEW_TEST && inside(x,y,AM_TEST_X,AM_TEST_Y,AM_TEST_W,AM_TEST_H)) return ACTION_TEST;
+    if (m->nav==VIEW_TEST) {
+        if (inside(x,y,AM_TEST_X,AM_TEST_Y,AM_TEST_W,AM_TEST_H)) return ACTION_TEST;
+        if (inside(x,y,AM_SPEED_TEST_X,AM_TEST_Y,AM_TEST_W,AM_TEST_H)) return ACTION_SPEED_TEST;
+    }
     if (m->nav==VIEW_REBOOT || m->nav==VIEW_EXIT) {
         for (int i=0;i<AM_CHOICE_COUNT;++i) if (inside(x,y,AM_CHOICE_X,AM_CHOICE_Y+i*AM_CHOICE_STEP,AM_CHOICE_W,AM_CHOICE_H)) {
             m->editing=1;m->field=i;return am_ui_input(m,AM_CROSS);

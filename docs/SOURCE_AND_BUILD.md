@@ -63,7 +63,7 @@ The resume callback signals a worker; the worker waits for the owned USB device 
 
 Commit the matching source before creating the GitHub release tag. Publish a
 stable release with one VPK named `PSVSD_AM_<version>.vpk`, such as
-`PSVSD_AM_1.2.5.vpk`. The app reads the version and SHA-256 from GitHub's
+`PSVSD_AM_1.2.6.vpk`. The app reads the version and SHA-256 from GitHub's
 release API and downloads the VPK over HTTPS. The VPK includes all three
 kernel payloads.
 
@@ -82,6 +82,7 @@ The settings schema and LiveArea XML format versions are independent.
 ## Installer cleanup
 
 Save removes the temporary installer before copying apps to another mount.
-Explicit Exit and Reboot log cleanup failures and proceed with the requested
-action. The installer embedded in the PSVSD/AM package is used for future
-updates. See [the Vita test](UPDATE_TEST.md) for the launch and clock checks.
+Save and Reboot and Save and Exit each perform a single cleanup before saving.
+Exit and Reboot without Save attempt cleanup and log failures. The installer
+embedded in the PSVSD/AM package is used for future updates. See
+[the Vita test guide](UPDATE_TEST.md).

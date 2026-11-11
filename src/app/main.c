@@ -34,6 +34,9 @@ static void update_progress(void *context,unsigned phase,unsigned done,unsigned 
     __atomic_add_fetch(&progress_sequence,1,__ATOMIC_SEQ_CST);
 }
 static uint64_t last_update_check;
+static int speed_thread=-1,speed_target;
+static AmSpeedResult speed_result;
+static unsigned speed_done,speed_percent;
 
 static AccessorySession session;
 static uint32_t *framebuffers[2];
@@ -126,38 +129,61 @@ static int request_original(void *ctx,char *message,size_t cap) {
     return 0;
 }
 static int cleanup_installer(const char *when) {
+    am_log("Starting temporary installer cleanup before %s.\n",when);
     int ret=am_update_cleanup_installer();
     am_log("Temporary installer cleanup before %s: %08X\n",when,(unsigned)ret);
     return ret;
 }
 static int save(void) {
-    int cleaned=cleanup_installer("save / storage preparation");
-    if (cleaned<0) {
-        snprintf(model.message,sizeof(model.message),"Installer cleanup failed: %08X. Copy/save cancelled. See Log.",(unsigned)cleaned);
-        redraw=1;return cleaned;
-    }
-    model.busy=1;model.copy_active=0;model.message[0]=0;memset(&model.copy,0,sizeof(model.copy));draw();
+    model.copy_active=0;model.message[0]=0;memset(&model.copy,0,sizeof(model.copy));
     query_status();
     uint32_t last=0;
     AmSaveCallbacks callbacks={copy_progress,request_usb,&last,request_original};
     int r=am_save_settings_with_callbacks(&model.pending,&callbacks,model.message,sizeof(model.message));
-    model.copy_active=0;model.busy=0;
+    model.copy_active=0;
     if (r>=0) { model.saved=model.pending;model.dirty=0;model.reboot_pending=1; }
     char exported[192];am_export_report(NULL,exported,sizeof(exported));
     refresh_log();redraw=1;
     return r;
 }
-static void test(void) {
-    model.busy=1;model.test_attempted=0;model.progress=0;
-    memset(&model.test,0,sizeof(model.test));model.test.result=-1;
-    snprintf(model.stage,sizeof(model.stage),"Checking accessory storage");draw();
+static int leave_app(int action) {
+    const int save_first=action==ACTION_SAVE_REBOOT || action==ACTION_SAVE_EXIT;
+    const int reboot=action==ACTION_SAVE_REBOOT || action==ACTION_REBOOT;
+    am_log("User requested %s (save=%d).\n",reboot?"reboot":"exit",save_first);
+    model.busy=1;
+    snprintf(model.message,sizeof(model.message),"%s",save_first?(reboot?"Saving settings and rebooting...":"Saving settings and exiting..."):
+        (reboot?"Preparing to reboot...":"Preparing to exit..."));
+    draw();
+
+    int exiting=0;
+    int cleaned=cleanup_installer(save_first?"save / storage preparation":reboot?"reboot":"exit");
+    if (save_first && cleaned<0) {
+        snprintf(model.message,sizeof(model.message),"Installer cleanup failed: %08X. Copy/save cancelled. See Log.",(unsigned)cleaned);
+    } else if (!save_first || save()>=0) {
+        if (reboot) {
+            int artwork=am_artwork_sync_files();
+            am_log("Artwork files prepared before reboot: %08X\n",(unsigned)artwork);
+            am_log("Submitting cold reboot request.\n");
+            int ret=scePowerRequestColdReset();
+            am_log("Cold reboot request returned: %08X\n",(unsigned)ret);
+            snprintf(model.message,sizeof(model.message),ret<0?"Reboot failed: %08X. See Log.":"Reboot requested: %08X",(unsigned)ret);
+        } else {
+            int artwork=am_artwork_refresh();
+            am_log("Artwork refresh on explicit exit: %08X\n",(unsigned)artwork);
+            exiting=1;
+        }
+    }
+    model.busy=0;redraw=1;
+    return exiting;
+}
+static int prepare_test_mount(void) {
     am_status(&model.status);
     if (model.status.legacy_loaded) {
-        snprintf(model.message,sizeof(model.message),"An older test is resident. Reboot before testing.");goto finish;
+        snprintf(model.message,sizeof(model.message),"An older test is resident. Reboot before testing.");return -1;
     }
     if (!model.status.loaded) {
         if (session.attempted) {
-            snprintf(model.message,sizeof(model.message),"Probe already requested. Export Log, then reboot.");goto finish;
+            snprintf(model.message,sizeof(model.message),"Probe already requested. Export Log, then reboot.");return -1;
         }
         accessory_session_run(&session);
         if (session.log_result<0) am_log("Session report write failed: %08X\n",(unsigned)session.log_result);
@@ -167,16 +193,76 @@ static void test(void) {
     }
     query_status();
     if (!model.status.verified_mount) {
-        snprintf(model.message,sizeof(model.message),"USB mount not verified. Open Log and export the report.");goto finish;
+        snprintf(model.message,sizeof(model.message),"USB mount not verified. Open Log and export the report.");return -1;
     }
-    model.test_attempted=1;
-    int ret=am_test_io(model.status.actual_target,&model.test,progress,NULL);
-    model.test_passed=ret>=0;
-    snprintf(model.message,sizeof(model.message),ret>=0?"4 MiB read/write verification passed.":"Read/write test failed (%08X). See Log.",(unsigned)ret);
-finish:
+    return 0;
+}
+static void finish_test(void) {
     model.busy=0;refresh_log();
     char note[192];am_export_report(session.attempted?session.text:NULL,note,sizeof(note));
     redraw=1;
+}
+static void test(void) {
+    model.busy=1;model.test_attempted=0;model.progress=0;model.message[0]=0;
+    memset(&model.test,0,sizeof(model.test));model.test.result=-1;
+    snprintf(model.stage,sizeof(model.stage),"Checking accessory storage");draw();
+    if (prepare_test_mount()==0) {
+        model.test_attempted=1;
+        int ret=am_test_io(model.status.actual_target,&model.test,progress,NULL);
+        model.test_passed=ret>=0;
+        if (ret<0) snprintf(model.message,sizeof(model.message),"Read/write test failed (%08X). See Log.",(unsigned)ret);
+    }
+    finish_test();
+}
+static void publish_speed_progress(unsigned percent,void *context) {
+    (void)context;
+    __atomic_store_n(&speed_percent,percent,__ATOMIC_RELAXED);
+}
+static int speed_worker(SceSize argc,void *args) {
+    (void)argc;(void)args;
+    /* Let the launch-time update check finish its file reads before timing I/O. */
+    int ret=update_thread>=0?sceKernelWaitThreadEnd(update_thread,NULL,NULL):0;
+    if (ret<0) {
+        speed_result=(AmSpeedResult){.result=ret,.target=speed_target};
+        am_log("Waiting for startup update check before Speed Test failed: %08X\n",(unsigned)ret);
+    } else am_speed_test(speed_target,&speed_result,publish_speed_progress,NULL);
+    __atomic_store_n(&speed_done,1,__ATOMIC_RELEASE);
+    return 0;
+}
+static void start_speed_test(void) {
+    if (speed_thread>=0) return;
+    model.busy=1;model.speed_active=1;model.speed_attempted=0;
+    model.speed_progress=AM_SPEED_PREPARING;model.message[0]=0;
+    draw();
+    if (prepare_test_mount()==0) {
+        speed_target=model.status.actual_target;
+        __atomic_store_n(&speed_done,0,__ATOMIC_RELAXED);
+        __atomic_store_n(&speed_percent,AM_SPEED_PREPARING,__ATOMIC_RELAXED);
+        speed_thread=sceKernelCreateThread("PSVSDAMSpeedTest",speed_worker,0x10000100,0x10000,0,0,NULL);
+        int ret=speed_thread;
+        if (ret>=0) ret=sceKernelStartThread(speed_thread,0,NULL);
+        if (ret>=0) return;
+        if (speed_thread>=0) sceKernelDeleteThread(speed_thread);
+        speed_thread=-1;
+        model.speed_attempted=1;
+        model.speed=(AmSpeedResult){.result=ret,.target=speed_target};
+        am_log("Speed Test worker failed: %08X\n",(unsigned)ret);
+    }
+    model.speed_active=0;
+    finish_test();
+}
+static void poll_speed_test(void) {
+    if (speed_thread<0) return;
+    if (__atomic_load_n(&speed_done,__ATOMIC_ACQUIRE)) {
+        sceKernelWaitThreadEnd(speed_thread,NULL,NULL);
+        sceKernelDeleteThread(speed_thread);speed_thread=-1;
+        model.speed=speed_result;
+        model.speed_active=0;model.speed_attempted=1;
+        finish_test();
+    } else {
+        unsigned percent=__atomic_load_n(&speed_percent,__ATOMIC_RELAXED);
+        if (model.speed_progress!=percent) { model.speed_progress=percent;redraw=1; }
+    }
 }
 static int update_worker(SceSize argc,void *args) {
     (void)argc;(void)args;
@@ -332,7 +418,8 @@ int main(void) {
     unsigned previous=0,ticks=0;int exiting=0;
     while (!exiting) {
         if (update_installing) { poll_update_progress();model.update_animation=(model.update_animation+1)%1000;if (model.update_animation%5==0) redraw=1; }
-        int date_notice_opened=finish_update_check();
+        poll_speed_test();
+        int date_notice_opened=speed_thread<0?finish_update_check():0;
         if (redraw) draw();
         SceCtrlData pad;memset(&pad,0,sizeof(pad));sceCtrlPeekBufferPositive(0,&pad,1);
         unsigned pressed=date_notice_opened?0:(pad.buttons&~previous);previous=pad.buttons;
@@ -371,6 +458,7 @@ int main(void) {
         if (action==ACTION_CHECK_UPDATES) check_updates(0);
         else if (action==ACTION_INSTALL_UPDATE) install_update();
         else if (action==ACTION_TEST) test();
+        else if (action==ACTION_SPEED_TEST) start_speed_test();
         else if (action==ACTION_LOG) refresh_log();
         else if (action==ACTION_CLEAR_LOG) {
             am_clear_logs(model.message,sizeof(model.message));accessory_session_clear_log(&session);
@@ -380,28 +468,13 @@ int main(void) {
             query_status();if (session.attempted) accessory_session_refresh(&session);
             refresh_log();am_export_report(NULL,model.message,sizeof(model.message));
         }
-        if (action==ACTION_SAVE_REBOOT || action==ACTION_SAVE_EXIT) {
-            int reboot=action==ACTION_SAVE_REBOOT;
-            action=save()>=0?(reboot?ACTION_REBOOT:ACTION_EXIT):ACTION_NONE;
-            am_touch_block(&touch_state);
-        }
-        if (action==ACTION_REBOOT) {
-            am_log("User requested reboot.\n");
-            /* Cleanup is independent of Save. No LiveArea refresh on the reboot path. */
-            cleanup_installer("reboot");
-            int artwork=am_artwork_sync_files();
-            am_log("Artwork files prepared before reboot: %08X\n",(unsigned)artwork);
-            int r=scePowerRequestColdReset();
-            am_log("Cold reboot request returned: %08X\n",(unsigned)r);
-            snprintf(model.message,sizeof(model.message),r<0?"Reboot failed: %08X. See Log.":"Reboot requested: %08X",(unsigned)r);
-        } else if (action==ACTION_EXIT) {
-            cleanup_installer("exit");
-            int artwork=am_artwork_refresh();
-            am_log("Artwork refresh on explicit exit: %08X\n",(unsigned)artwork);
-            exiting=1;
-        }
+        if (action==ACTION_SAVE_REBOOT || action==ACTION_SAVE_EXIT || action==ACTION_REBOOT || action==ACTION_EXIT)
+            exiting=leave_app(action);
         if (action!=ACTION_NONE) am_touch_block(&touch_state);
-        if (++ticks%25==0) { am_status(&model.status);redraw=1; }
+        if (++ticks%25==0) {
+            if (speed_thread>=0) sceKernelPowerTick(SCE_KERNEL_POWER_TICK_DEFAULT);
+            else { am_status(&model.status);redraw=1; }
+        }
         sceKernelDelayThread(20000);
     }
     if (front_sampling_started) sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT,

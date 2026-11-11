@@ -3,18 +3,63 @@
 #include <stdio.h>
 #include "mock_cleanup.h"
 #include "../src/app/update_install.h"
-static int stat_result,stop_result,delete_result,stop_calls,delete_calls,cancels;
-int sceIoGetstat(const char *p,SceIoStat *s) { (void)s;assert(!strcmp(p,"ux0:app/RTPSVUPD1/eboot.bin"));return stat_result; }
-int sceAppMgrDestroyAppByName(const char *title) { assert(!strcmp(title,"RTPSVUPD1"));++stop_calls;return stop_result; }
-int am_package_remove_helper(void) { assert(stop_calls>delete_calls);++delete_calls;return delete_result; }
-void am_update_relaunch_cancel(void) { ++cancels; }
+static struct {
+    int installed,running,natural_exit,removal_delay,permanent_removal;
+    int stat_error,lookup_error,stop_error,stop_ignored,delete_error;
+    int lookups,stops,deletes,delays,cancels;
+} test;
+static void reset(void) {
+    memset(&test,0,sizeof(test));
+    test.installed=1;
+}
+int sceIoGetstat(const char *p,SceIoStat *s) {
+    (void)s;assert(!strcmp(p,"ux0:app/RTPSVUPD1/eboot.bin"));
+    if (test.stat_error) return test.stat_error;
+    if (test.deletes && test.installed && !test.permanent_removal) {
+        if (test.removal_delay>0) --test.removal_delay;
+        else test.installed=0;
+    }
+    return test.installed?0:(int)0x80010002u;
+}
+int sceAppMgrGetIdByName(SceUID *pid,const char *title) {
+    assert(!strcmp(title,"RTPSVUPD1"));++test.lookups;
+    if (test.lookup_error) return test.lookup_error;
+    if (test.natural_exit && --test.natural_exit==0) test.running=0;
+    if (!test.running) return (int)AM_APPMGR_NOT_RUNNING;
+    *pid=1;return 0;
+}
+int sceAppMgrDestroyAppByName(const char *title) {
+    assert(!strcmp(title,"RTPSVUPD1"));++test.stops;
+    if (!test.stop_error && !test.stop_ignored) test.running=0;
+    return test.stop_error;
+}
+int am_package_remove_helper(void) {
+    assert(!test.running || test.lookup_error);
+    ++test.deletes;return test.delete_error;
+}
+int sceKernelDelayThread(unsigned us) { assert(us==20000);++test.delays;return 0; }
+void am_update_relaunch_cancel(void) { assert(!test.installed);++test.cancels; }
 int main(void) {
- stat_result=(int)0x80010002;assert(am_update_cleanup_installer()==0 && !stop_calls);
- stat_result=-5;assert(am_update_cleanup_installer()==-5 && !stop_calls);
- stat_result=0;stop_result=-6;assert(am_update_cleanup_installer()==-6 && !delete_calls);
- stop_result=(int)0x80802012;delete_result=-7;assert(am_update_cleanup_installer()==-7 && !cancels);
- delete_result=0;assert(am_update_cleanup_installer()==0 && cancels==1);
- stop_result=0;assert(am_update_cleanup_installer()==0 && cancels==2);
- puts("Installer cleanup: absent, stat/stop/delete failures, stopped and already-exited helper passed");
- return 0;
+    reset();test.installed=0;
+    assert(am_update_cleanup_installer()==0 && !test.lookups && !test.deletes);
+    reset();test.stat_error=-5;
+    assert(am_update_cleanup_installer()==-5 && !test.lookups && !test.deletes);
+    reset();assert(am_update_cleanup_installer()==0 && !test.stops && test.deletes==1 && test.cancels==1);
+    assert(am_update_cleanup_installer()==0 && test.deletes==1);
+    reset();test.running=1;test.natural_exit=3;test.removal_delay=2;
+    assert(am_update_cleanup_installer()==0 && !test.stops && test.deletes==1 && test.delays==4);
+    reset();test.running=1;
+    assert(am_update_cleanup_installer()==0 && test.stops==1 && test.deletes==1 && test.delays==25);
+    reset();test.running=1;test.stop_error=-6;
+    assert(am_update_cleanup_installer()==-6 && test.stops==1 && !test.deletes);
+    reset();test.lookup_error=-8;test.stop_error=(int)AM_APPMGR_NOT_RUNNING;
+    assert(am_update_cleanup_installer()==0 && test.stops==1 && test.deletes==1 && !test.delays);
+    reset();test.running=1;test.stop_ignored=1;
+    assert(am_update_cleanup_installer()==(int)SCE_APPMGR_ERROR_BUSY && !test.deletes);
+    reset();test.delete_error=-7;
+    assert(am_update_cleanup_installer()==-7 && test.deletes==1 && !test.cancels);
+    reset();test.permanent_removal=1;
+    assert(am_update_cleanup_installer()==(int)SCE_APPMGR_ERROR_BUSY && test.deletes==1 && !test.cancels);
+    puts("Installer cleanup: normal exit, fallback stop, removal confirmation and failures passed");
+    return 0;
 }
