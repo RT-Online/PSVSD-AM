@@ -15,7 +15,7 @@ static int am_save_settings(const AmSettings *s,char *message,size_t cap) {
     return am_save_settings_with_callbacks(s,NULL,message,cap);
 }
 static int am_save_settings_with_progress(const AmSettings *s,AmCopyCallback progress,void *ctx,char *message,size_t cap) {
-    AmSaveCallbacks callbacks={progress,NULL,ctx,NULL};
+    AmSaveCallbacks callbacks={.progress=progress,.ctx=ctx};
     return am_save_settings_with_callbacks(s,&callbacks,message,cap);
 }
 
@@ -34,6 +34,7 @@ static struct {
     int source_change,tai_change,boot_change,yamt_change,lose_usb;
     int add_source,add_destination,fail_rollback;
     int request_calls,request_error,request_no_mount;
+    int before_copy_calls,before_copy_error;
     int speed_syncs,speed_fail_sync,speed_short_read,speed_full;
     unsigned speed_writes,speed_reads,speed_preads,speed_pwrites;
     unsigned speed_percent;
@@ -263,8 +264,42 @@ static int request_original_cb(void *ctx,char *message,size_t cap) {
     (void)ctx;(void)message;(void)cap;++cfg.request_calls;cfg.hide_uma=0;
     put(ACCESSORY_KERNEL_DIR "/runtime.txt","PSVSD/AM " ACCESSORY_VERSION "\nRequest: 00001234\nMount: ux0:\nOriginal: uma0:\n");return 0;
 }
+static int before_copy_cb(void *ctx,char *message,size_t cap) {
+    (void)ctx;assert(!cfg.before_copy_calls && !cfg.copy_callbacks);
+    ++cfg.before_copy_calls;
+    if (cfg.before_copy_error) snprintf(message,cap,"Installer removal failed.");
+    return cfg.before_copy_error;
+}
+static void test_before_copy(void) {
+    const AmSettings primary={1,AM_UX0},secondary={1,AM_UMA0};
+    const AmSaveCallbacks callbacks={.progress=copy_cb,.before_copy=before_copy_cb};
+    const char *live_primary="PSVSD/AM " ACCESSORY_VERSION "\nRequest: 00001234\nMount: ux0:\nOriginal: uma0:\n";
+    char message[192],contents[65536];
+
+    reset();put(ACCESSORY_KERNEL_DIR "/runtime.txt",live_primary);
+    assert(am_save_settings_with_callbacks(&primary,&callbacks,message,sizeof(message))==0);
+    assert(!cfg.before_copy_calls && !cfg.copy_callbacks);
+    reset();
+    assert(am_save_settings_with_callbacks(&secondary,&callbacks,message,sizeof(message))==0);
+    assert(!cfg.before_copy_calls && !cfg.copy_callbacks);
+
+    reset();copy_fixture();
+    assert(am_save_settings_with_callbacks(&primary,&callbacks,message,sizeof(message))==0);
+    assert(cfg.before_copy_calls==1 && cfg.copy_callbacks>0);
+    reset();copy_fixture();put(ACCESSORY_KERNEL_DIR "/runtime.txt",live_primary);
+    assert(am_save_settings_with_callbacks(&secondary,&callbacks,message,sizeof(message))==0);
+    assert(cfg.before_copy_calls==1 && cfg.copy_callbacks>0);
+
+    reset();copy_fixture();cfg.before_copy_error=-9;
+    assert(am_save_settings_with_callbacks(&primary,&callbacks,message,sizeof(message))==-9);
+    assert(!strcmp(message,"Installer removal failed.") && !local_exists(AM_SETTINGS_PATH));
+    assert(cfg.before_copy_calls==1 && !cfg.copy_callbacks);
+    get("uma0:app/RTPSV0001/eboot.bin",contents);assert(!strcmp(contents,"old app"));
+    puts("Save pre-copy cleanup: same-mount saves skip it, both copy directions run it, failure stops copying");
+}
 int main(void) {
     AmSettings s;AmTestResult r;AmStatus status;char message[192],out[65536],other[65536];
+    test_before_copy();
     reset();assert(am_load_settings(&s)==0 && !s.enabled && s.target==AM_UMA0);
     reset();assert(sceIoMkdir(AM_LEGACY_KERNEL_DIR,0777)>=0);
     put(AM_LEGACY_SETTINGS_PATH,"version=1\nenabled=1\nmount=uma0\n");
@@ -527,7 +562,7 @@ int main(void) {
     unsigned char chunk[8192];size_t position=0,amount;
     while ((amount=fread(chunk,1,sizeof(chunk),large_file))) { assert(!memcmp(chunk,big+position,amount));position+=amount; }
     assert(position==big_size && !ferror(large_file));fclose(large_file);free(big);
-    AmSaveCallbacks callbacks={copy_cb,request_cb,NULL,NULL};
+    AmSaveCallbacks callbacks={.progress=copy_cb,.request_usb=request_cb};
     reset();copy_fixture();cfg.module=0;s=(AmSettings){1,AM_UX0};
     assert(am_save_settings_with_callbacks(&s,&callbacks,message,sizeof(message))==0 && cfg.request_calls==1 && cfg.copy_percent==100);
     reset();copy_fixture();cfg.module=0;cfg.request_error=1;s=(AmSettings){1,AM_UX0};
@@ -602,7 +637,7 @@ int main(void) {
     }
     reset();copy_fixture();cfg.hide_uma=1;
     put(ACCESSORY_KERNEL_DIR "/runtime.txt","PSVSD/AM " ACCESSORY_VERSION "\nRequest: 00001234\nMount: ux0:\nOriginal: none\n");
-    AmSaveCallbacks reverse={copy_cb,NULL,NULL,request_original_cb};s=(AmSettings){1,AM_UMA0};
+    AmSaveCallbacks reverse={.progress=copy_cb,.request_original=request_original_cb};s=(AmSettings){1,AM_UMA0};
     assert(am_save_settings_with_callbacks(&s,&reverse,message,sizeof(message))==0 && cfg.request_calls==1);++cases;
     for (int failure=0;failure<3;++failure) {
         reset();copy_fixture();

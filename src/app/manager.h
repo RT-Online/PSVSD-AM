@@ -28,7 +28,12 @@ typedef struct {
 typedef void (*AmProgress)(unsigned percent,const char *stage,void *ctx);
 typedef void (*AmSpeedProgress)(unsigned percent,void *ctx);
 typedef int (*AmStorageRequest)(void *ctx,char *message,size_t cap);
-typedef struct { AmCopyCallback progress;AmStorageRequest request_usb;void *ctx;AmStorageRequest request_original; } AmSaveCallbacks;
+typedef struct {
+    AmCopyCallback progress;
+    AmStorageRequest request_usb;
+    void *ctx;
+    AmStorageRequest request_original,before_copy;
+} AmSaveCallbacks;
 int am_read_text(const char *path,char *out,size_t cap);
 int am_read_log(const char *path,char *out,size_t cap);
 int am_load_settings(AmSettings *s);

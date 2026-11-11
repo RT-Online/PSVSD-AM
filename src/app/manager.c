@@ -322,6 +322,16 @@ static int configs_unchanged(const char *tai,const char *boot) {
     }
     free(text);return same;
 }
+static int prepare_save_apps(int original,const AmSaveCallbacks *callbacks,char *message,size_t cap) {
+    AmCopyCallback progress=callbacks?callbacks->progress:NULL;
+    void *ctx=callbacks?callbacks->ctx:NULL;
+    if (callbacks && callbacks->before_copy) {
+        int ret=callbacks->before_copy(ctx,message,cap);
+        if (ret<0) return ret;
+    }
+    return original?am_prepare_original_apps(progress,ctx,message,cap):
+        am_prepare_usb_apps(progress,ctx,message,cap);
+}
 int am_save_settings_with_callbacks(const AmSettings *s,const AmSaveCallbacks *callbacks,char *message,size_t cap) {
     if (!cap) return IO_ERROR;
     message[0]=0;
@@ -362,7 +372,7 @@ int am_save_settings_with_callbacks(const AmSettings *s,const AmSaveCallbacks *c
         if (!before.original_ready) {
             ret=-1;snprintf(message,cap,"Original storage unavailable. Save/reboot with USB ux0 once to refresh the boot plugin, then retry.");goto done;
         }
-        ret=am_prepare_original_apps(callbacks?callbacks->progress:NULL,callbacks?callbacks->ctx:NULL,message,cap);if (ret<0) goto done;
+        ret=prepare_save_apps(1,callbacks,message,cap);if (ret<0) goto done;
         am_status(&before);
         if (!before.original_ready || !configs_unchanged(old_tai,boot_config) || !prepared_apps()) {
             ret=-1;snprintf(message,cap,"Apps could not be confirmed on original storage. Settings unchanged. See Log.");goto done;
@@ -383,7 +393,7 @@ int am_save_settings_with_callbacks(const AmSettings *s,const AmSaveCallbacks *c
             if (!(status.verified_mount && status.actual_target==AM_UMA0)) {
                 ret=-1;snprintf(message,cap,"Run the USB test to verify uma0 before preparing ux0.");goto done;
             }
-            ret=am_prepare_usb_apps(callbacks?callbacks->progress:NULL,callbacks?callbacks->ctx:NULL,message,cap);if (ret<0) goto done;
+            ret=prepare_save_apps(0,callbacks,message,cap);if (ret<0) goto done;
             if (!configs_unchanged(old_tai,boot_config)) {
                 ret=-1;snprintf(message,cap,"Storage configuration changed during copy. Retry Save.");goto done;
             }

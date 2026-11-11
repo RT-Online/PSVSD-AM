@@ -134,11 +134,20 @@ static int cleanup_installer(const char *when) {
     am_log("Temporary installer cleanup before %s: %08X\n",when,(unsigned)ret);
     return ret;
 }
-static int save(void) {
+static int cleanup_before_copy(void *ctx,char *message,size_t cap) {
+    (void)ctx;
+    int ret=cleanup_installer("storage copy");
+    if (ret<0) snprintf(message,cap,"Installer cleanup failed (%08X). App copy stopped.",(unsigned)ret);
+    return ret;
+}
+static int save(AmStorageRequest before_copy) {
     model.copy_active=0;model.message[0]=0;memset(&model.copy,0,sizeof(model.copy));
     query_status();
     uint32_t last=0;
-    AmSaveCallbacks callbacks={copy_progress,request_usb,&last,request_original};
+    AmSaveCallbacks callbacks={
+        .progress=copy_progress,.request_usb=request_usb,.ctx=&last,
+        .request_original=request_original,.before_copy=before_copy
+    };
     int r=am_save_settings_with_callbacks(&model.pending,&callbacks,model.message,sizeof(model.message));
     model.copy_active=0;
     if (r>=0) { model.saved=model.pending;model.dirty=0;model.reboot_pending=1; }
@@ -156,10 +165,12 @@ static int leave_app(int action) {
     draw();
 
     int exiting=0;
-    int cleaned=cleanup_installer(save_first?"save / storage preparation":reboot?"reboot":"exit");
+    /* Keep LiveArea package removal out of the ordinary reboot path.
+     * A storage copy still has to remove the helper before writing apps. */
+    int cleaned=reboot?0:cleanup_installer(save_first?"save and exit":"exit");
     if (save_first && cleaned<0) {
         snprintf(model.message,sizeof(model.message),"Installer cleanup failed: %08X. Copy/save cancelled. See Log.",(unsigned)cleaned);
-    } else if (!save_first || save()>=0) {
+    } else if (!save_first || save(reboot?cleanup_before_copy:NULL)>=0) {
         if (reboot) {
             int artwork=am_artwork_sync_files();
             am_log("Artwork files prepared before reboot: %08X\n",(unsigned)artwork);

@@ -4,9 +4,9 @@
 
 AI tools assisted with code development, documentation, and testing. RefurbedTech directed development and performed hardware testing.
 
-Version **1.2.6** · Vita title ID **RTPSV0001** · Package version **01.26**
+Version **1.2.7** · Vita title ID **RTPSV0001** · Package version **01.27**
 
-The launcher displays the `1.2` series. The app and update metadata show `1.2.6`.
+The launcher displays the `1.2` series. The app and update metadata show `1.2.7`.
 See [the Vita test guide](docs/UPDATE_TEST.md) for update, reboot and speed checks.
 
 ## Features
@@ -181,10 +181,10 @@ records the return in the app log within five minutes.
 
 ### Save and Reboot after an update
 
-Save and Reboot lets the temporary updater exit and confirms removal of the
-helper before any app-folder copying. After committing settings, it prepares
-the artwork cache through file I/O and requests a cold reset. The log records
-cleanup, artwork preparation and reset. Full LiveArea refresh runs on Exit.
+When you keep the current storage mount, Save and Reboot commits settings,
+prepares the artwork cache through file I/O, and requests a cold reset.
+The temporary installer is removed on Exit or before an app-folder copy
+between mounts. Full LiveArea artwork refresh runs on Exit.
 
 ### Artwork and data folders
 
