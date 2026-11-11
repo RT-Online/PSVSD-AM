@@ -4,7 +4,7 @@
 #include <psp2/sysmodule.h>
 #include <psp2/promoterutil.h>
 #include <stdint.h>
-static int promote(const char *path,int remove) {
+static int promote(const char *path,int remove,int retain_modules) {
     uint32_t args[]={0x180000,(uint32_t)-1,(uint32_t)-1,1,(uint32_t)-1,(uint32_t)-1};
     int result=-1,ret;SceSysmoduleOpt option={16,&result,{-1,-1}};
     int paf=0,module=0,initialized=0;
@@ -21,9 +21,11 @@ static int promote(const char *path,int remove) {
     if (ret>=0 && !remove) { int promoted=0;ret=scePromoterUtilityGetResult(&promoted);if (ret>=0) ret=promoted; }
 done:
     if (initialized) scePromoterUtilityExit();
+    /* Leave the shell modules loaded after startup cleanup until process exit. */
+    if (retain_modules && initialized) return ret;
     if (module) sceSysmoduleUnloadModuleInternal(SCE_SYSMODULE_INTERNAL_PROMOTER_UTIL);
     if (paf) { SceSysmoduleOpt out={0,&result,{0,0}};sceSysmoduleUnloadModuleInternalWithArg(SCE_SYSMODULE_INTERNAL_PAF,0,NULL,&out); }
     return ret;
 }
-int am_package_promote(const char *path) { return promote(path,0); }
-int am_package_remove_helper(void) { return promote("RTPSVUPD1",1); }
+int am_package_promote(const char *path) { return promote(path,0,0); }
+int am_package_remove_helper(int retain_modules) { return promote("RTPSVUPD1",1,retain_modules); }

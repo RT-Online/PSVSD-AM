@@ -425,6 +425,13 @@ int main(void) {
         if (!strcmp(result,"00000000")) snprintf(model.message,sizeof(model.message),artwork>0?"Update installed. Choose Reboot to refresh home-screen artwork.":"Update installed. Saved mount settings retained.");
         else snprintf(model.message,sizeof(model.message),"Update installation failed (%s). See Log.",result);
     }
+    if (migrated>=0) {
+        int cleanup=am_update_cleanup_installer_on_launch();
+        if (cleanup==AM_INSTALLER_REMOVED) am_log("Removed temporary installer on startup.\n");
+        else if (cleanup==AM_INSTALLER_CLEANUP_DEFERRED) am_log("Temporary installer cleanup deferred.\n");
+        else if (cleanup<0) am_log("Temporary installer cleanup on startup failed: %08X\n",(unsigned)cleanup);
+        if (cleanup) refresh_log();
+    }
     check_updates(1);
     unsigned previous=0,ticks=0;int exiting=0;
     while (!exiting) {
