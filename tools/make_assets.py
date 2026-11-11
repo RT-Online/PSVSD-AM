@@ -37,7 +37,12 @@ def icons():
     # Rear microSD profile follows the
     # Kingston microSD mechanical drawing (page 24), with contacts at the top.
     white='#edf5ff';cyan='#46dcc7';navy='#102137';size=512
-    version=re.search(r'#define ACCESSORY_VERSION "([^"]+)"',(ROOT/'src/common/paths.h').read_text()).group(1)
+    release_version = re.search(
+        r'#define ACCESSORY_VERSION "([^"]+)"',
+        (ROOT / 'src/common/paths.h').read_text(),
+    ).group(1)
+    major, minor, _patch = release_version.split('.', 2)
+    artwork_version = f'{major}.{minor}'
     # Unit geometry is 11 x 15. SVG curves and raster samples share the path.
     commands=[];outline=[];current=(0,0)
     def move(x,y):
@@ -69,12 +74,12 @@ def icons():
         svg.append(f'<rect x="{x:.2f}" y="{y:.2f}" width="0.8" height="{4-y:.2f}" fill="{navy}"/>')
         draw.rectangle((round(left+x*scale),round(top+y*scale),round(left+(x+.8)*scale),round(top+4*scale)),fill=navy)
     svg.append('</g>')
-    draw.text((256,269),version,font=ImageFont.truetype(str(BOLD),50),anchor='ms',fill=navy)
+    draw.text((256,269),artwork_version,font=ImageFont.truetype(str(BOLD),50),anchor='ms',fill=navy)
     draw.text((256,378),'PSVSD/AM',font=ImageFont.truetype(str(BOLD),64),anchor='ms',fill=white)
     draw.text((256,413),'Accessory',font=ImageFont.truetype(str(FONT),28),anchor='ms',fill=cyan)
     draw.text((256,446),'Storage Mount',font=ImageFont.truetype(str(FONT),28),anchor='ms',fill=white)
     svg+=['<g text-anchor="middle" font-family="DejaVu Sans,sans-serif">',
-        f'<text x="256" y="269" font-size="50" font-weight="bold" fill="{navy}">{version}</text>',
+        f'<text x="256" y="269" font-size="50" font-weight="bold" fill="{navy}">{artwork_version}</text>',
         '<text x="256" y="378" font-size="64" font-weight="bold" fill="#edf5ff">PSVSD/AM</text>',
         '<text x="256" y="413" font-size="28" fill="#46dcc7">Accessory</text>',
         '<text x="256" y="446" font-size="28" fill="#edf5ff">Storage Mount</text></g></svg>']
@@ -85,7 +90,7 @@ def icons():
     draw.text((58,76),'PSVSD/AM',font=ImageFont.truetype(str(BOLD),64),fill=white)
     draw.text((62,160),'Accessory Storage Mount',font=ImageFont.truetype(str(FONT),28),fill=cyan)
     draw.text((62,214),'Internal storage. Open gamecard slot.',font=ImageFont.truetype(str(FONT),23),fill='#9bacc3')
-    draw.text((62,272),'v'+version,font=ImageFont.truetype(str(BOLD),24),fill=cyan)
+    draw.text((62,272),'v'+artwork_version,font=ImageFont.truetype(str(BOLD),24),fill=cyan)
     round_mask=Image.new('L',(224,224));ImageDraw.Draw(round_mask).ellipse((0,0,223,223),fill=255)
     bg.paste(im.resize((224,224),Image.Resampling.LANCZOS),(560,126),round_mask)
     draw.text((62,400),'RefurbedTech',font=ImageFont.truetype(str(FONT),23),fill='#9bacc3')

@@ -8,6 +8,7 @@
 #include <errno.h>
 #include "mock_artwork.h"
 #include "../src/app/artwork.h"
+#include "../src/common/paths.h"
 #undef rename
 static int fail_rename;
 int am_test_rename(const char *from,const char *to) {
@@ -57,7 +58,7 @@ int main(void) {
     write_file("app0:sce_sys/icon0.png","third-icon");
     write_file("ur0:data/PSVSD_AM/artwork-version","1.1.9");
     assert(am_artwork_refresh()==1 && refreshes==6);
-    check("ur0:data/PSVSD_AM/artwork-version","1.2.3");
+    check("ur0:data/PSVSD_AM/artwork-version",ACCESSORY_VERSION);
     assert(am_artwork_refresh()==0 && refreshes==6);
     write_file("app0:sce_sys/icon0.png","reboot-icon");
     int prior_loads=loads,prior_unloads=unloads;

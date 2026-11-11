@@ -66,8 +66,8 @@ Keep generated VPK/SKPRX binaries and their checksums in GitHub Releases. Commit
 
 ## Version metadata
 
-`src/common/paths.h` is the source of truth for semantic release 1.2.3 and
-Vita package revision 01.23. CMake derives both app/helper SFO fields and kernel
+`src/common/paths.h` is the source of truth for semantic release 1.2.4 and
+Vita package revision 01.24. CMake derives both app/helper SFO fields and kernel
 module metadata from it. Increment the NN.NN package revision for each release;
 do not calculate it from semantic version digits. After 01.99 use 02.00.
 Semantic versions such as 1.2.30 and 1.10.0 are supported. The updater compares

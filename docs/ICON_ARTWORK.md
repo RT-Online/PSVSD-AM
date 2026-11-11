@@ -1,7 +1,9 @@
 # Launcher artwork
 
 The flat teal microSD icon uses navy `#102137` and teal `#46dcc7`. It shows
-PSVSD/AM, the current semantic version and Accessory Storage Mount.
+PSVSD/AM, the major and minor version, and Accessory Storage Mount. The bubble,
+LiveArea background and startup art display `1.2` for all `1.2.x` releases.
+The app and package metadata retain the exact release version.
 
 `tools/make_assets.py` generates the editable SVG, indexed 128 px icon and
 matching LiveArea images. The SVG and raster drawing share the same geometry.
@@ -12,7 +14,7 @@ left edge and eight contacts. Its mechanical reference is Kingston's microSDHC
 technical specification, page 24:
 https://www.kingston.com/datasheets/SDCIT-specsheet-8gb-32gb_en.pdf
 
-Version 1.2.3 uses Vita package APP_VER 01.23. The `format-ver="01.00"` in
+Version 1.2.4 uses Vita package APP_VER 01.24. The `format-ver="01.00"` in
 LiveArea XML describes the XML format and is intentionally unchanged.
 
 The user confirmed a restart displays the new artwork. In 1.1.7, startup only

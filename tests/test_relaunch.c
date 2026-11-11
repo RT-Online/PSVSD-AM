@@ -30,9 +30,9 @@ int main(void) {
     expected_title="RTPSV0001";launch_result=0;
     assert(am_update_relaunch_confirm()==0);assert(am_update_relaunch_start(0)<0 && launch_calls==2);
     assert(am_update_relaunch_start(123)==0 && launch_calls==3 && no_ack());
-    assert(am_update_relaunch_confirm()==1);check_ack("0000007B 1.2.3 0\n");
+    assert(am_update_relaunch_confirm()==1);check_ack("0000007B " ACCESSORY_VERSION " 0\n");
     assert(am_update_relaunch_start(456)==0 && no_ack());
-    assert(am_update_relaunch_confirm()==1);check_ack("000001C8 1.2.3 0\n");
+    assert(am_update_relaunch_confirm()==1);check_ack("000001C8 " ACCESSORY_VERSION " 0\n");
     am_update_relaunch_cancel();assert(am_update_relaunch_confirm()==0 && no_ack());
     put(AM_UPDATE_ROOT "/launch-request","junk");assert(am_update_relaunch_confirm()<0);
     put(AM_UPDATE_ROOT "/launch-request","00000000");assert(am_update_relaunch_confirm()<0);
@@ -44,7 +44,7 @@ int main(void) {
     assert(am_update_relaunch_confirm()<0 && no_ack());
     assert(am_update_relaunch_start(1000)==0);--clock_tick;assert(am_update_relaunch_confirm()<0);
     assert(am_update_relaunch_start(1001)==0);clock_tick+=AM_RELAUNCH_WAIT_US;
-    assert(am_update_relaunch_confirm()==1);check_ack("000003E9 1.2.3 300000000\n");
+    assert(am_update_relaunch_confirm()==1);check_ack("000003E9 " ACCESSORY_VERSION " 300000000\n");
     assert(am_update_relaunch_confirm()==0); /* Receipt consumed once. */
     puts("Relaunch: both title launches, negative results and one-shot receipts passed");return 0;
 }
