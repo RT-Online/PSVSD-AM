@@ -76,13 +76,13 @@ string(REPLACE "${vita_data_align}" "${vita_data_align}\n  . += 0x10000;" vita_l
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/app-layout.ld" "${vita_link_contents}")
 target_link_options(psvsd_am_app PRIVATE "-Wl,-T,${CMAKE_CURRENT_BINARY_DIR}/app-layout.ld")
 target_link_libraries(psvsd_am_app SceDisplay_stub SceCtrl_stub SceProcessmgr_stub
-  SceIofilemgr_stub SceLibKernel_stub SceVshBridge_stub ScePower_stub SceTouch_stub SceLiveArea_stub SceNet_stub SceNetCtl_stub SceAppMgr_stub SceRtc_stub ScePromoterUtil_stub SceSysmodule_stub taihen_stub
+  SceIofilemgr_stub SceLibKernel_stub SceVshBridge_stub ScePower_stub SceTouch_stub SceLiveArea_stub SceNet_stub SceNetCtl_stub SceAppMgr_stub ScePromoterUtil_stub SceSysmodule_stub taihen_stub
   -Wl,--start-group curl mbedtls mbedx509 mbedcrypto everest p256m z zstd pthread -Wl,--end-group)
 clean_vita_self(psvsd_am_app.self psvsd_am_app UNSAFE)
-add_executable(psvsd_am_installer app/installer_main.c app/launch.c app/installer_cleanup.c app/relaunch.c app/migration.c app/package.c app/package_metadata.c app/ui.c app/updates.c common/settings.c)
+add_executable(psvsd_am_installer app/installer_main.c app/launch.c app/relaunch.c app/migration.c app/package.c app/package_metadata.c app/ui.c app/updates.c common/settings.c)
 target_compile_options(psvsd_am_installer PRIVATE -Wall -Wextra -Werror -O2 -ffunction-sections -fdata-sections)
 target_link_options(psvsd_am_installer PRIVATE -Wl,--gc-sections)
-target_link_libraries(psvsd_am_installer SceAppMgr_stub SceRtc_stub ScePromoterUtil_stub SceSysmodule_stub SceDisplay_stub SceCtrl_stub SceLibKernel_stub SceIofilemgr_stub SceProcessmgr_stub)
+target_link_libraries(psvsd_am_installer SceAppMgr_stub ScePromoterUtil_stub SceSysmodule_stub SceDisplay_stub SceCtrl_stub SceLibKernel_stub SceIofilemgr_stub SceProcessmgr_stub)
 clean_vita_self(psvsd_am_installer.self psvsd_am_installer UNSAFE)
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/installer.sfo"
   COMMAND "${VITASDK}/bin/vita-mksfoex" -s TITLE_ID=RTPSVUPD1 -s APP_VER=${AM_PACKAGE_VERSION} -s AM_VERSION=${AM_VERSION}

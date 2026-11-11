@@ -16,6 +16,11 @@ int am_touch_point(const AmTouchBounds *b,int rx,int ry,int *x,int *y) {
 }
 int am_ui_tap(AmUi *m,int x,int y) {
     if (m->busy) return ACTION_NONE;
+    if (m->update_date_notice) {
+        if (inside(x,y,AM_DATE_OK_X,AM_CONFIRM_Y,AM_DATE_OK_W,AM_CONFIRM_H))
+            return am_ui_input(m,AM_CROSS);
+        return ACTION_NONE;
+    }
     if (m->update_confirm) {
         if (inside(x,y,AM_CONFIRM_X,AM_CONFIRM_Y,AM_CONFIRM_W,AM_CONFIRM_H)) { m->update_choice=0;return am_ui_input(m,AM_CROSS); }
         if (inside(x,y,AM_CANCEL_X,AM_CONFIRM_Y,AM_CONFIRM_W,AM_CONFIRM_H)) return am_ui_input(m,AM_CIRCLE);

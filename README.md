@@ -4,10 +4,10 @@
 
 AI tools assisted with code development, documentation, and testing. RefurbedTech directed development and performed hardware testing.
 
-Version **1.2.4** · Vita title ID **RTPSV0001** · Package version **01.24**
+Version **1.2.5** · Vita title ID **RTPSV0001** · Package version **01.25**
 
-The launcher displays the `1.2` series. The app and update metadata show `1.2.4`.
-See [the update test](docs/UPDATE_TEST.md) for the 1.2.3 to 1.2.4 handoff.
+The launcher displays the `1.2` series. The app and update metadata show `1.2.5`.
+See [the updater test](docs/UPDATE_TEST.md) for the Vita handoff and clock notice checks.
 
 ## Features
 
@@ -73,37 +73,37 @@ The three kernel payloads are intentional: `psvsd_am.skprx` is the boot plugin, 
 
 ## Validation and license
 
-Run host checks with `sh tests/run_tests.sh`. The 1.2.4 candidate passed the host
-suite, native VitaSDK build and import audits. The 1.2.3 updater also recognized
-and staged the 1.2.4 VPK in a host test with mocked package promotion. The Vita
-handoff test is pending. Earlier hardware testing confirmed secondary file
-transfers, standby recovery and primary mounting.
+Run host checks with `sh tests/run_tests.sh`. The Vita test guide covers
+the installer handoff, automatic return and clock notice. Earlier
+hardware testing confirmed secondary file transfers, standby recovery and
+primary mounting.
 
 GPL-3.0-or-later; see [COPYING](COPYING) and [third-party notices](docs/THIRD_PARTY_NOTICES.md). Derived from USBMC by Yifan Lu and VitaShell storage code by TheFloW. Font and taiHEN SDK components retain their own licenses.
 
 
 ## Check for updates
 
-The app quietly checks the latest stable GitHub release once at launch when
-Wi-Fi is already connected. It does not block menu navigation, enable Wi-Fi,
-prompt for a connection or force an update. Offline/error results do not open a
-dialog. A newer release is noted on Overview and on the Updates page.
+The app checks the latest stable GitHub release over HTTPS once at launch when
+Wi-Fi is connected. You can keep using the app during the check. A newer release
+is noted on Overview and on the Updates page.
+
+If an HTTPS certificate fails its date check, PSVSD/AM opens a clock notice. Open
+**Settings → Date & Time → Date & Time Settings** on the Vita and choose
+**Set via Internet → Set Now** or **Set Manually**. Then return to the app and
+select **Check for Updates**.
 
 Open **Updates** to read release notes. Select **Update to [version]** and confirm
 **Install Update** to download and install; Cancel is selected initially. Pending
 mount edits must be saved or discarded first. A manual **Check for Updates**
-button remains when no installable newer version is available. Checks are limited
-to one GitHub attempt per minute; Left/Right or swipes browse notes.
+button remains when no installable newer version is available. Checks usually
+have a one-minute cooldown. You can retry immediately after a date error. Use
+Left/Right or swipe to browse notes.
 
-Only a named `PSVSD_AM_*.vpk` asset from this repository with a GitHub-provided
-SHA-256 digest is installable. The app downloads over verified HTTPS, checks the
-digest, extracts into its own staging directory, checks ZIP CRCs and validates
-TITLE_ID, CONTENT_ID and APP_VER before handing off to a separate installer.
-The helper closes PSVSD/AM, installs the staged package and reopens PSVSD/AM.
-Its temporary bubble is removed when you choose Exit, if system promotion
-allows removal. Reboot deliberately skips this Shell-facing operation.
-Failures leave diagnostics in the app's update data; pre-install validation
-failures do not touch the live app. Keep power available during installation.
+The updater checks the VPK SHA-256 before extracting into its staging directory.
+It verifies ZIP CRCs and app and installer metadata before handing off to the
+temporary installer. The helper stops the previous PSVSD/AM process, promotes the
+staged package and requests that PSVSD/AM reopen. Save, Exit and Reboot can remove
+the temporary installer. Update failures appear in the log.
 
 Downloads show transferred MiB and percentage when the total is known; unknown
 totals show an animated bar. Verification and extraction show their own progress.
@@ -119,17 +119,9 @@ checks compare numeric versions, optionally prefixed by `v` or `v.`. Semantic ve
 monotonically increasing NN.NN package revision. Both app and helper carry
 AM_VERSION so installation validates the exact release tag and matching package.
 
-Version 1.1.6 and later select the helper from the verified download. However,
-installed versions through 1.1.8 still initiate that first handoff with the older
-URI call. If an old version stops at installer LiveArea, press Start once to
-finish, or install 1.2.3 manually with VitaShell. Only after the new main app is
-running can its corrected installer-launch call be used. Same-version releases
-are not offered again.
-
-The default/arbitrary system-date compatibility change is still pending. TLS
-certificate and hostname verification remain enabled. Installer handoff and
-installation still require console testing; host checks cannot prove hardware
-or power-loss behavior. There is no login, token or telemetry.
+The installed version controls the launch of the temporary installer. The helper
+from the downloaded VPK controls the return. This allows an upgrade from 1.2.4
+to test the new return sequence.
 
 ### Switching storage in either direction
 
@@ -164,38 +156,25 @@ is automatically exported to `ux0:data/PSVSD_AM/test.log`; export failures
 are reported on screen. Offline skips remain silent.
 
 
-### Bundled TLS — no iTLS-Enso requirement
+### Bundled TLS
 
-The app includes libcurl, Mbed TLS and a Mozilla CA bundle inside
-the VPK. Update checks no longer use the Vita's system HTTPS implementation.
-Users do not need to install iTLS-Enso or modify system certificates. TLS 1.2 or
-newer, certificate-chain validation and hostname verification remain required.
-The network feature still needs testing on the Vita; it does not change storage
-settings. If it fails, the Updates page includes a readable libcurl error reason.
+The VPK includes libcurl, Mbed TLS and a Mozilla CA bundle. Both the version
+check and VPK download require TLS 1.2 or newer with certificate and hostname
+validation. The app verifies the VPK against GitHub's release-asset SHA-256.
 
-### Update handoffs (1.2.3)
+### Installer handoff
 
-Both directions use the 1.2.0 title-launch sequence, with flags 0x70000.
-The installer exits after an accepted request; a failed request stays visible
-for retry. The Shell may still ask to close the installer. Startup does not
-perform package deletion or LiveArea refresh. Helper cleanup runs before
-storage preparation and on explicit Exit/Reboot, with or without Save.
-One-shot startup receipts expire after five minutes and are diagnostic only.
+Both directions use the two play-URI requests observed in AutoPlugin2 2.20.
+A successful request lets the current process exit. The installer logs both
+results and offers retry when both requests fail. A boot-relative timestamp
+records the return in the app log within five minutes.
 
 ### Save and Reboot after an update
 
-The user reports normal boot works, but Save and Reboot after updating minimizes
-the app. The previous sequence requested LiveArea refresh and helper removal
-before reset. Those Shell-facing operations are now absent from the reboot path.
-
-Save still verifies app copies and commits settings first. On success, reboot
-prepares artwork cache files using file I/O only, then calls the existing cold
-reset API directly. It logs the returned code and displays an error if reset is
-rejected. Save failure still prevents reboot. No storage mapping logic changes.
-
-Actual LiveArea refresh and helper removal remain available on explicit Exit.
-The temporary helper bubble can remain through reboot until a later Exit. Startup and idle code do not perform package deletion. This timing tradeoff keeps Shell calls
-out of the foreground-dependent reboot sequence.
+Save verifies the app copies and commits settings before reboot. Reboot prepares
+the artwork cache through file I/O, requests temporary installer cleanup and
+then requests a cold reset. The log records the returned codes. Full LiveArea
+refresh runs on Exit.
 
 ### Artwork and data folders
 
@@ -226,44 +205,3 @@ when current settings are missing. The boot-plugin filename/tai entry stays stab
 After upgrading, use Reboot → Save and Reboot once to stage the current boot
 plugin, copy the current app if switching storage, and apply the saved target.
 An older resident/boot plugin can still use legacy paths until that reboot.
-
-### Testing status
-
-Build, host tests and package checks pass. Both automatic launches, the
-post-update Save/Reboot path and artwork reload still require Vita confirmation.
-Default-date TLS compatibility remains unresolved. No GitHub changes are made
-by preparing these packages.
-
-## 1.2.3 regression correction
-
-The 1.2.1 hardware log showed a successful install, a 33-second delayed startup,
-successful automatic cleanup and subsequent main-app activity despite the reported
-return to LiveArea. It did not establish a process crash or isolate which of the
-two new Shell operations caused lost focus. The generic 0x70000 title launch from
-1.2.0 is restored and automatic startup package deletion is removed. Cleanup is
-again on explicit Exit. The earlier close-installer prompt may remain. This is a
-regression recovery, not a claim that prompt suppression has been solved.
-
-Popup confirmation buttons now use the teal background and Cancel the dark card
-background. Original text colors are restored. A selection underline preserves
-visible focus; default Cancel selection, actions and positions are unchanged.
-The Reboot/Exit choice screens retain their original styling.
-
-One-shot five-minute diagnostic receipts are retained. Installer display, storage
-copying and reboot logic are unchanged. Validate this build on Vita.
-
-## 1.2.3 temporary installer cleanup
-
-Before Save/storage preparation, and independently on Exit and Reboot (including
-without-save choices), remove the separately installed RTPSVUPD1 helper using
-its exact title ID. Save/copy stops if this cleanup fails; explicit Exit/Reboot
-log failures and continue their requested action. No startup cleanup is added.
-After verifying the destination mount and before staging app copies, remove only
-its stale uma0:app/RTPSVUPD1 folder; failure blocks copying. The embedded installer
-inside RTPSV0001 is retained for future updates. Other app folders are untouched.
-
-Helper cleanup is separated from artwork refresh. Reboot retains file-only cache
-preparation and always reaches the reset request after cleanup returns, regardless
-of cleanup status. Full LiveArea refresh remains on Exit. Console validation is
-required for reboot/focus after promoter deletion; this change does not claim to
-fix Shell image caching or the close-installer launch prompt.

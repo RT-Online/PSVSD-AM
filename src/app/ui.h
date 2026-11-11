@@ -6,7 +6,7 @@ enum { VIEW_OVERVIEW,VIEW_SETTINGS,VIEW_TEST,VIEW_LOG,VIEW_UPDATES,VIEW_CREDITS,
 typedef struct {
     int nav,field,editing,dirty,reboot_pending,busy,touch_available,return_nav;
     int clear_confirm,clear_choice;
-    int update_confirm,update_choice;
+    int update_confirm,update_choice,update_date_notice;
     int copy_active;
     AmCopyProgress copy;
     unsigned log_page,progress;

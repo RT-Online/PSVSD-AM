@@ -61,64 +61,27 @@ The resume callback signals a worker; the worker waits for the owned USB device 
 
 ## Publication
 
-Keep generated VPK/SKPRX binaries and their checksums in GitHub Releases. Commit source, licensed build inputs, tests and concise documentation to the repository. The separate source-audit report records this cleanup and its validation limits.
+Commit the matching source before creating the GitHub release tag. Publish a
+stable release with one VPK named `PSVSD_AM_<version>.vpk`, such as
+`PSVSD_AM_1.2.5.vpk`. The app reads the version and SHA-256 from GitHub's
+release API and downloads the VPK over HTTPS. The VPK includes all three
+kernel payloads.
 
 
 ## Version metadata
 
-`src/common/paths.h` is the source of truth for semantic release 1.2.4 and
-Vita package revision 01.24. CMake derives both app/helper SFO fields and kernel
-module metadata from it. Increment the NN.NN package revision for each release;
-do not calculate it from semantic version digits. After 01.99 use 02.00.
+`src/common/paths.h` sets the semantic version and Vita package revision.
+CMake derives the app, helper and kernel module metadata from it. Increment
+both versions at release time. The Vita revision increments from 01.99 to 02.00.
 Semantic versions such as 1.2.30 and 1.10.0 are supported. The updater compares
 numeric semantic components, verifies the release digest and matches AM_VERSION
 in app/helper metadata. APP_VER must match between both packages.
 The settings schema and LiveArea XML format versions are independent.
 
-## Maintenance changes in 1.2.3
 
-- Installer exits after an accepted main-app launch; negative results retain retry.
-- Diagnostic receipts no longer delay helper exit. Confirmed display logic is unchanged.
-- Semantic versions support components above nine during installation, not just checking.
-- Shared package validation removes duplicated version arithmetic and unused polling.
-- Confirmation/cancellation colors are swapped; control actions remain unchanged.
-- Removed superseded release narratives from this guide. Vendor source/licenses retained.
+## Installer cleanup
 
-Host tests and native builds cannot establish firmware focus/launch behavior.
-Confirm the return transition on hardware, including the previous-app prompt,
-then test Save and Reboot after updating. Arbitrary/default-date TLS compatibility
-remains unresolved; certificate verification has not been disabled.
-
-## 1.2.3 regression correction
-
-The 1.2.1 hardware log showed a successful install, a 33-second delayed startup,
-successful automatic cleanup and subsequent main-app activity despite the reported
-return to LiveArea. It did not establish a process crash or isolate which of the
-two new Shell operations caused lost focus. The generic 0x70000 title launch from
-1.2.0 is restored and automatic startup package deletion is removed. Cleanup is
-again on explicit Exit. The earlier close-installer prompt may remain. This is a
-regression recovery, not a claim that prompt suppression has been solved.
-
-Popup confirmation buttons now use the teal background and Cancel the dark card
-background. Original text colors are restored. A selection underline preserves
-visible focus; default Cancel selection, actions and positions are unchanged.
-The Reboot/Exit choice screens retain their original styling.
-
-One-shot five-minute diagnostic receipts are retained. Installer display, storage
-copying and reboot logic are unchanged. Validate this build on Vita.
-
-## 1.2.3 temporary installer cleanup
-
-Before Save/storage preparation, and independently on Exit and Reboot (including
-without-save choices), remove the separately installed RTPSVUPD1 helper using
-its exact title ID. Save/copy stops if this cleanup fails; explicit Exit/Reboot
-log failures and continue their requested action. No startup cleanup is added.
-After verifying the destination mount and before staging app copies, remove only
-its stale uma0:app/RTPSVUPD1 folder; failure blocks copying. The embedded installer
-inside RTPSV0001 is retained for future updates. Other app folders are untouched.
-
-Helper cleanup is separated from artwork refresh. Reboot retains file-only cache
-preparation and always reaches the reset request after cleanup returns, regardless
-of cleanup status. Full LiveArea refresh remains on Exit. Console validation is
-required for reboot/focus after promoter deletion; this change does not claim to
-fix Shell image caching or the close-installer launch prompt.
+Save removes the temporary installer before copying apps to another mount.
+Explicit Exit and Reboot log cleanup failures and proceed with the requested
+action. The installer embedded in the PSVSD/AM package is used for future
+updates. See [the Vita test](UPDATE_TEST.md) for the launch and clock checks.

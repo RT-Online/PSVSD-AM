@@ -122,11 +122,12 @@ static void updates_view(const AmUi *m) {
     const char *state=u->state==UPDATE_UNCHECKED?"Check for a newer public release.":
         u->state==UPDATE_OFFLINE?"Updates not checked.":
         u->state==UPDATE_CHECKING?"Checking Wi-Fi and GitHub...":u->message;
-    wrapped(290,220,state,600,2,1,u->state==UPDATE_ERROR?BAD:ACCENT);
+    int failed=u->state==UPDATE_ERROR || u->state==UPDATE_DATE_ERROR;
+    wrapped(290,220,state,600,2,1,failed?BAD:ACCENT);
     char info[128];
     snprintf(info,sizeof(info),"Installed: %s    Latest: %s",ACCESSORY_VERSION,u->version[0]?u->version:"Not checked");
     text(290,284,0,TEXT,info);
-    if (u->state==UPDATE_ERROR) {
+    if (failed) {
         char diagnostic[640];am_update_diagnostic(u,diagnostic,sizeof(diagnostic));
         wrapped(290,312,diagnostic,600,6,0,TEXT);
     } else if (u->notes[0]) {
@@ -239,6 +240,14 @@ static void clear_log_confirmation(const AmUi *m) {
         text(x+(AM_CONFIRM_W-width(choices[i],1))/2,AM_CONFIRM_Y+17,1,m->clear_choice==i?ACCENT:MUTED,choices[i]);
     }
 }
+static void update_date_notice(void) {
+    round_rect(258,154,666,300,18,BORDER);round_rect(260,156,662,296,16,PANEL);
+    text(284,177,2,TEXT,"Check the Vita's date and time");
+    wrapped(284,246,"Open Settings > Date & Time > Date & Time Settings.\n"
+        "Choose Set via Internet > Set Now, or set it manually.\n"
+        "Return to PSVSD/AM and check for updates again.",604,3,0,TEXT);
+    button(AM_DATE_OK_X,AM_CONFIRM_Y,AM_DATE_OK_W,AM_CONFIRM_H,"OK",1);
+}
 static void copy_view(const AmUi *m) {
     const AmCopyProgress *p=&m->copy;char b[160];
     title(m->copy.restoring?"Preparing original storage":"Preparing USB storage","Copying and verifying PSVSD/AM and VitaShell for the next ux0.");
@@ -279,8 +288,9 @@ void am_ui_render(uint32_t *pixels,const AmUi *m) {
         round_rect(274,440,634,32,8,COLOR(23,43,63));
         wrapped(284,444,m->message,614,1,0,TEXT);
     }
-    if (m->clear_confirm) clear_log_confirmation(m);
-    if (m->update_confirm) {
+    if (m->update_date_notice) update_date_notice();
+    else if (m->clear_confirm) clear_log_confirmation(m);
+    else if (m->update_confirm) {
         round_rect(258,154,666,300,18,BORDER);round_rect(260,156,662,296,16,PANEL);
         text(284,177,2,TEXT,"Install update?");
         char b[160];snprintf(b,sizeof(b),"Download and install %s? The app will close and reopen.",m->update.version);

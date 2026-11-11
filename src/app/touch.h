@@ -36,6 +36,8 @@ int am_ui_tap(AmUi *ui,int x,int y);
 #define AM_CONFIRM_Y 366
 #define AM_CONFIRM_W 300
 #define AM_CONFIRM_H 62
+#define AM_DATE_OK_X 501
+#define AM_DATE_OK_W 180
 #define AM_TEST_X 726
 #define AM_TEST_Y 362
 #define AM_TEST_W 178

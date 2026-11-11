@@ -98,7 +98,9 @@ int main(void) {
     handoff_log("Update path migration",migrated);
     int closed=sceAppMgrDestroyAppByName("RTPSV0001");
     handoff_log("Close previous PSVSD/AM",closed);
-    int worker=migrated<0?migrated:sceKernelCreateThread("AMInstallerWorker",install_worker,0x10000100,0x10000,0,0,NULL);
+    int worker=migrated;
+    if (worker>=0 && closed<0 && (unsigned)closed!=AM_APPMGR_NOT_RUNNING) worker=closed;
+    if (worker>=0) worker=sceKernelCreateThread("AMInstallerWorker",install_worker,0x10000100,0x10000,0,0,NULL);
     int start=worker;if (start>=0) start=sceKernelStartThread(worker,0,NULL);
     if (start<0) { install_result=start;__atomic_store_n(&install_done,1,__ATOMIC_RELEASE); }
     while (!__atomic_load_n(&install_done,__ATOMIC_ACQUIRE)) {
@@ -108,6 +110,7 @@ int main(void) {
     if (worker>=0) { if (start>=0) sceKernelWaitThreadEnd(worker,NULL,NULL);sceKernelDeleteThread(worker); }
     int result=install_result;FILE *f;
     handoff_log("Install result",result);remove(AM_UPDATE_ROOT "/ready");
+    if (migrated>=0) remove(AM_UPDATE_VPK); /* Also covers older callers. */
     f=fopen(AM_UPDATE_ROOT "/result","wb");if (f) { fprintf(f,"%08X",(unsigned)result);fclose(f); }
     if (result>=0) for (unsigned i=0;i<15;++i) show(AM_UPDATE_COMPLETE,tick++);
     if (result<0) snprintf(failure,sizeof(failure),"Installation did not complete.\nPress X to return to PSVSD/AM. Details are in Log.");
@@ -119,17 +122,14 @@ int main(void) {
             int pressed=(pad.buttons&SCE_CTRL_CROSS)!=0;
             if (!pressed || held) { held=pressed;continue; }
         }
-        uint32_t token=sceKernelGetProcessTimeLow();if (!token) token=1;
         show(AM_UPDATE_REOPEN,tick++);
-        int launch=am_update_relaunch_start(token);
+        int launch=am_update_relaunch_start();
         handoff_log("Submit main-app launch",launch);
         if (launch>=0) {
-            /* Match the working main-to-helper handoff: waiting here keeps the
-             * previous app alive and can block the target behind a close prompt. */
             handoff_log("Helper exiting after accepted launch",0);
             sceKernelExitProcess(result<0?1:0);return 0;
         }
-        am_update_relaunch_cancel();install_result=launch;wait=held=1;
+        install_result=launch;wait=held=1;
         failure_title="Could not reopen PSVSD/AM";
         snprintf(failure,sizeof(failure),"Launch request failed.\nPress X to retry opening PSVSD/AM.");
     }

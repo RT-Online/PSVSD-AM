@@ -53,7 +53,8 @@ ASAN_OPTIONS=detect_leaks=0 "$test_out/test_artwork"
 cc -std=c99 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
   -DPSVSD_AM_HOST_TEST=1 -I"$test_dir" "$test_dir/test_relaunch.c" \
   "$test_dir/../src/app/relaunch.c" "$test_dir/../src/app/launch.c" -o "$test_out/test_relaunch"
-ASAN_OPTIONS=detect_leaks=0 "$test_out/test_relaunch"
+mkdir "$test_out/relaunch"
+ASAN_OPTIONS=detect_leaks=0 "$test_out/test_relaunch" "$test_out/relaunch"
 cc -std=c99 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
   -DPSVSD_AM_HOST_TEST=1 -I"$test_dir" "$test_dir/test_installer.c" -o "$test_out/test_installer"
 ASAN_OPTIONS=detect_leaks=0 "$test_out/test_installer"

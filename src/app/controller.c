@@ -12,6 +12,10 @@ static void back(AmUi *m) {
 }
 int am_ui_input(AmUi *m,unsigned keys) {
     if (m->busy) return ACTION_NONE;
+    if (m->update_date_notice) {
+        if (keys&(AM_CROSS|AM_CIRCLE)) m->update_date_notice=0;
+        return ACTION_NONE;
+    }
     if (m->update_confirm) {
         if (keys&AM_CIRCLE) { m->update_confirm=0;return ACTION_NONE; }
         if (keys&(AM_LEFT|AM_RIGHT|AM_UP|AM_DOWN)) { m->update_choice^=1;return ACTION_NONE; }

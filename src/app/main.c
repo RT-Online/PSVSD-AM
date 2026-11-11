@@ -185,6 +185,7 @@ static int update_worker(SceSize argc,void *args) {
             snprintf(update_result.stage,sizeof(update_result.stage),"Stage verified VPK / installer");
             if (am_update_prepare(install_release.version,update_result.reason,sizeof(update_result.reason),update_progress,NULL)==0)
                 { update_result.state=UPDATE_READY;update_result.error=0; }
+            remove(AM_UPDATE_VPK);
         }
     } else am_update_check(&update_result);
     __atomic_store_n(&update_done,1,__ATOMIC_RELEASE);
@@ -220,11 +221,12 @@ static void check_updates(int quiet) {
         am_log("Update worker failed: %08X\n",(unsigned)ret);if (!quiet) update_report();redraw=1;
     }
 }
-static void finish_update_check(void) {
-    if (update_thread<0 || !__atomic_load_n(&update_done,__ATOMIC_ACQUIRE)) return;
+static int finish_update_check(void) {
+    if (update_thread<0 || !__atomic_load_n(&update_done,__ATOMIC_ACQUIRE)) return 0;
     sceKernelWaitThreadEnd(update_thread,NULL,NULL);sceKernelDeleteThread(update_thread);update_thread=-1;
     model.update=update_result;model.busy=0;redraw=1;
-    if (model.update.state!=UPDATE_OFFLINE) last_update_check=sceKernelGetProcessTimeWide();
+    if (model.update.state==UPDATE_DATE_ERROR) last_update_check=0;
+    else if (model.update.state!=UPDATE_OFFLINE) last_update_check=sceKernelGetProcessTimeWide();
     if (update_installing) {
         update_report();
         if (model.update.state==UPDATE_READY) {
@@ -240,10 +242,17 @@ static void finish_update_check(void) {
         update_installing=0;
     } else if (!update_quiet) update_report();
     else {
-        am_log("Launch update check: state=%d latest=%s error=%08X\n",model.update.state,model.update.version,(unsigned)model.update.error);
+        am_log("Launch update check: state=%d latest=%s error=%08X TLS verify=%08X\n",
+            model.update.state,model.update.version,(unsigned)model.update.error,(unsigned)model.update.tls_verify);
         if (model.update.state==UPDATE_AVAILABLE && !model.message[0])
             snprintf(model.message,sizeof(model.message),"Update %s available. Open Updates to install.",model.update.version);
     }
+    if (model.update.state==UPDATE_DATE_ERROR) {
+        model.update_date_notice=1;
+        am_touch_block(&touch_state);
+        return 1;
+    }
+    return 0;
 }
 static void install_update(void) {
     if (update_thread>=0) return;
@@ -281,9 +290,8 @@ int main(void) {
     am_log("Data path migration: %08X\n",(unsigned)migrated);
     if (migrated<0) snprintf(model.message,sizeof(model.message),"Data migration incomplete. Existing files retained. See Log.");
     if (resumed>0) {
-        am_log("Updater startup receipt written within five minutes: PSVSD/AM " ACCESSORY_VERSION "\n");
-        am_log("Installer cleanup runs before storage preparation and on Exit/Reboot.\n");
-    } else if (resumed<0) am_log("Updater startup receipt rejected or failed (expired/malformed request, clock or write error).\n");
+        am_log("Updater return observed within five minutes: PSVSD/AM " ACCESSORY_VERSION "\n");
+    } else if (resumed<0) am_log("Updater return marker expired or unreadable.\n");
     redraw=1;
     query_status();refresh_log();
     am_log("Opened PSVSD/AM " ACCESSORY_VERSION "; saved enabled=%d target=%s\n",model.saved.enabled,am_target_name(model.saved.target));
@@ -315,6 +323,7 @@ int main(void) {
     FILE *installed=fopen(AM_UPDATE_ROOT "/result","rb");
     if (installed) {
         char result[16]={0};fread(result,1,8,installed);fclose(installed);
+        remove(AM_UPDATE_ROOT "/result");
         am_log("Installer result: %s\n",result);
         if (!strcmp(result,"00000000")) snprintf(model.message,sizeof(model.message),artwork>0?"Update installed. Choose Reboot to refresh home-screen artwork.":"Update installed. Saved mount settings retained.");
         else snprintf(model.message,sizeof(model.message),"Update installation failed (%s). See Log.",result);
@@ -323,10 +332,10 @@ int main(void) {
     unsigned previous=0,ticks=0;int exiting=0;
     while (!exiting) {
         if (update_installing) { poll_update_progress();model.update_animation=(model.update_animation+1)%1000;if (model.update_animation%5==0) redraw=1; }
-        finish_update_check();
+        int date_notice_opened=finish_update_check();
         if (redraw) draw();
         SceCtrlData pad;memset(&pad,0,sizeof(pad));sceCtrlPeekBufferPositive(0,&pad,1);
-        unsigned pressed=pad.buttons&~previous;previous=pad.buttons;
+        unsigned pressed=date_notice_opened?0:(pad.buttons&~previous);previous=pad.buttons;
         unsigned keys=0;
         if (pressed&SCE_CTRL_UP) keys|=AM_UP;
         if (pressed&SCE_CTRL_DOWN) keys|=AM_DOWN;

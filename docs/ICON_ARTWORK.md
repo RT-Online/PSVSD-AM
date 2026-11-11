@@ -14,8 +14,8 @@ left edge and eight contacts. Its mechanical reference is Kingston's microSDHC
 technical specification, page 24:
 https://www.kingston.com/datasheets/SDCIT-specsheet-8gb-32gb_en.pdf
 
-Version 1.2.4 uses Vita package APP_VER 01.24. The `format-ver="01.00"` in
-LiveArea XML describes the XML format and is intentionally unchanged.
+Vita package APP_VER comes from `src/common/paths.h`. LiveArea uses
+`format-ver="01.00"` for its XML format.
 
 The user confirmed a restart displays the new artwork. In 1.1.7, startup only
 checks whether refresh is needed. Cache writes and LiveArea replacement run on

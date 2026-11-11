@@ -12,7 +12,7 @@ int am_update_cleanup_installer(void) {
     int present=sceIoGetstat("ux0:app/RTPSVUPD1/eboot.bin",&info);
     if (present<0) return (unsigned)present==0x80010002u?0:present;
     int stopped=sceAppMgrDestroyAppByName("RTPSVUPD1");
-    if (stopped<0 && (unsigned)stopped!=0x80802012u) return stopped;
+    if (stopped<0 && (unsigned)stopped!=AM_APPMGR_NOT_RUNNING) return stopped;
     int ret=am_package_remove_helper();
     if (ret>=0) { remove(AM_UPDATE_ROOT "/result");am_update_relaunch_cancel(); }
     return ret;

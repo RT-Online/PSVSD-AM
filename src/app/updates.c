@@ -108,6 +108,20 @@ static int version(const char *s,unsigned out[3]) {
     }
     return *s?-1:0;
 }
+
+static int set_version(AmUpdate *out,const char *current) {
+    unsigned latest[3],installed[3];
+    if (version(out->version,latest)<0 || version(current,installed)<0) return -1;
+    out->state=UPDATE_CURRENT;
+    for (unsigned i=0;i<3;++i) if (latest[i]!=installed[i]) {
+        out->state=latest[i]>installed[i]?UPDATE_AVAILABLE:UPDATE_AHEAD;
+        break;
+    }
+    snprintf(out->message,sizeof(out->message),"%s",out->state==UPDATE_AVAILABLE?"A newer release is available.":
+        out->state==UPDATE_AHEAD?"Installed version is newer than the public release.":"You have the latest public release.");
+    return 0;
+}
+
 static int assets(Json *j,AmUpdate *out) {
     if (take(j,'[')<0) return -1;
     space(j);if (j->p<j->end && *j->p==']') { ++j->p;return 0; }
@@ -178,14 +192,7 @@ int am_update_parse(const char *json,size_t size,const char *current,AmUpdate *o
         space(&j);if (j.p<j.end && *j.p=='}') return -1;
     }
     space(&j);if (j.p!=j.end || (seen&25)!=25) return -1;
-    unsigned latest[3],installed[3];
-    if (version(result.version,latest)<0 || version(current,installed)<0) return -1;
-    result.state=UPDATE_CURRENT;
-    for (unsigned i=0;i<3;++i) if (latest[i]!=installed[i]) {
-        result.state=latest[i]>installed[i]?UPDATE_AVAILABLE:UPDATE_AHEAD;break;
-    }
-    snprintf(result.message,sizeof(result.message),"%s",result.state==UPDATE_AVAILABLE?"A newer release is available.":
-        result.state==UPDATE_AHEAD?"Installed version is newer than the public release.":"You have the latest public release.");
+    if (set_version(&result,current)<0) return -1;
     if (!result.notes[0]) snprintf(result.notes,sizeof(result.notes),"No release notes published.");
     *out=result;return 0;
 }

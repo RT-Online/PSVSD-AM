@@ -23,7 +23,5 @@ int sceKernelStartThread(int thread,SceSize argc,void *args);
 int sceKernelWaitThreadEnd(int thread,void *status,void *timeout);
 int sceKernelDeleteThread(int thread);
 int sceCtrlPeekBufferPositive(int port,SceCtrlData *pad,int count);
-uint32_t sceKernelGetProcessTimeLow(void);
-uint64_t sceKernelGetProcessTimeWide(void);
 int sceKernelExitProcess(int status);
 #endif

@@ -1,50 +1,57 @@
-/* A timed startup receipt records target startup for diagnostics.
- * The helper exits after launch acceptance; it never blocks on the receipt. */
+/* Record the installer-to-app transition using the boot-relative timer.
+ * A diagnostic write failure must not block reopening the app. */
 #include "update_install.h"
-#include "../common/paths.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #ifdef PSVSD_AM_HOST_TEST
 #include "mock_update_install.h"
 #else
-#include <psp2/rtc.h>
+#include <psp2/kernel/threadmgr.h>
 #endif
+
 #define REQUEST AM_UPDATE_ROOT "/launch-request"
-#define ACK AM_UPDATE_ROOT "/launch-ack"
-static int request(uint32_t *token,uint64_t *started) {
-    char text[64]={0};FILE *f=fopen(REQUEST,"rb");if (!f) return 0;
-    size_t n=fread(text,1,sizeof(text)-1,f);int ok=!ferror(f);if (fclose(f)) ok=0;
-    unsigned value=0;unsigned long long time=0;char tail;
-    if (!ok || n!=25 || sscanf(text,"%8X %16llX%c",&value,&time,&tail)!=2 || !value) return -1;
-    *token=value;*started=time;return 1;
+#define LEGACY_ACK AM_UPDATE_ROOT "/launch-ack"
+
+void am_update_relaunch_cancel(void) {
+    remove(REQUEST);
+    remove(LEGACY_ACK);
 }
-void am_update_relaunch_cancel(void) { remove(REQUEST);remove(ACK); }
-int am_update_relaunch_start(uint32_t token) {
-    if (!token) return -1;
+
+int am_update_relaunch_start(void) {
     am_update_relaunch_cancel();
-    SceRtcTick tick;if (sceRtcGetCurrentTick(&tick)<0) return -1;
-    FILE *f=fopen(REQUEST,"wb");if (!f) return -1;
-    int ok=fprintf(f,"%08X %016llX",(unsigned)token,(unsigned long long)tick.tick)==25;if (fclose(f)) ok=0;
-    if (!ok) { am_update_relaunch_cancel();return -1; }
-    int ret=am_update_launch_app();
-    if (ret<0) am_update_relaunch_cancel();
-    return ret;
+    int64_t started=sceKernelGetSystemTimeWide();
+    FILE *file=started>=0?fopen(REQUEST,"wb"):NULL;
+    if (file) {
+        int written=fprintf(file,"%016llX",(unsigned long long)started);
+        if (fclose(file)!=0 || written!=16) remove(REQUEST);
+    }
+    int result=am_update_launch_app();
+    if (result<0) remove(REQUEST);
+    return result;
 }
+
 int am_update_relaunch_confirm(void) {
-    uint32_t token;uint64_t started;int ret=request(&token,&started);if (ret<=0) return ret;
-    SceRtcTick tick;
-    if (sceRtcGetCurrentTick(&tick)<0 || tick.tick<started || tick.tick-started>AM_RELAUNCH_WAIT_US) {
-        am_update_relaunch_cancel();return -1;
+    remove(LEGACY_ACK);
+    FILE *file=fopen(REQUEST,"rb");
+    if (!file) return 0;
+    char text[17]={0};
+    size_t length=fread(text,1,sizeof(text),file);
+    int read_ok=!ferror(file);
+    int closed=fclose(file);
+    int consumed=remove(REQUEST);
+    if (length!=16 || !read_ok || closed!=0 || consumed!=0 ||
+        strspn(text,"0123456789ABCDEF")!=16) return -1;
+
+    uint64_t started=strtoull(text,NULL,16);
+    int64_t now=sceKernelGetSystemTimeWide();
+    if (now<0 || (uint64_t)now<started || (uint64_t)now-started>AM_RELAUNCH_WAIT_US) return -1;
+
+    file=fopen(AM_UPDATE_ROOT "/handoff.log","a");
+    if (file) {
+        fprintf(file,"Startup receipt: elapsed_us=%llu version=" ACCESSORY_VERSION "\n",
+            (unsigned long long)((uint64_t)now-started));
+        fclose(file);
     }
-    FILE *f=fopen(ACK,"wb");if (!f) return -1;
-    int ok=fprintf(f,"%08X " ACCESSORY_VERSION " %llu\n",(unsigned)token,
-        (unsigned long long)(tick.tick-started))>0;
-    if (fclose(f)) ok=0;
-    if (ok) {
-        f=fopen(AM_UPDATE_ROOT "/handoff.log","a");
-        if (f) { fprintf(f,"Startup receipt: token=%08X elapsed_us=%llu version=" ACCESSORY_VERSION "\n",
-            (unsigned)token,(unsigned long long)(tick.tick-started));fclose(f); }
-    }
-    if (ok) remove(REQUEST);
-    return ok?1:-1;
+    return 1;
 }

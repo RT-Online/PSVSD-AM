@@ -80,6 +80,14 @@ int main(int argc,char **argv) {
     m.update.state=UPDATE_ERROR;m.update.error=60;m.update.tls_verify=0x20;
     strcpy(m.update.stage,"Send HTTPS request");strcpy(m.update.message,"Could not check GitHub. See Log.");
     am_ui_render(buffer.pixels,&m);if (argc>1) dump(argv[1],"UpdatesError");
+    m.update.state=UPDATE_DATE_ERROR;m.update_date_notice=1;
+    strcpy(m.update.message,"Check the Vita's date and time.");
+    am_ui_render(buffer.pixels,&m);if (argc>1) dump(argv[1],"UpdateDateNotice");
+    assert(am_ui_input(&m,AM_DOWN|AM_SQUARE)==ACTION_NONE && m.update_date_notice && m.nav==VIEW_UPDATES);
+    assert(am_ui_input(&m,AM_CROSS)==ACTION_NONE && !m.update_date_notice);
+    assert(am_ui_input(&m,AM_CROSS)==ACTION_CHECK_UPDATES);
+    m.update_date_notice=1;
+    assert(am_ui_input(&m,AM_CIRCLE)==ACTION_NONE && !m.update_date_notice && m.nav==VIEW_UPDATES);
     m.update.state=UPDATE_AVAILABLE;strcpy(m.update.version,"v1.0.4");
     strcpy(m.update.message,"A newer release is available.");
     for (unsigned i=0;i<3000;++i) m.update.notes[i]=i%60==59?'\n':'A';
