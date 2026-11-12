@@ -106,6 +106,17 @@ int am_load_settings(AmSettings *s) {
     if (r==ENOENT_VALUE) return 0;
     return r<0?r:am_settings_parse(text,s);
 }
+int am_load_auto_update(void) {
+    char value[3];
+    return am_read_text(AM_AUTO_UPDATE_PATH,value,sizeof(value))==2 &&
+        value[0]=='1' && value[1]=='\n';
+}
+int am_save_auto_update(int enabled) {
+    if (enabled && am_load_auto_update()) return 0;
+    int ret=sceIoRemove(AM_AUTO_UPDATE_PATH);
+    if (ret<0 && ret!=ENOENT_VALUE) return ret;
+    return enabled?am_replace_file(AM_AUTO_UPDATE_PATH,"1\n",2):0;
+}
 static int append_text(char *out,size_t cap,size_t *used,const char *p,size_t n) {
     if (*used+n>=cap) return -1;
     memcpy(out+*used,p,n);*used+=n;out[*used]=0;return 0;

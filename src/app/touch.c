@@ -1,4 +1,4 @@
-/* Front-panel taps, tap release gating and log swipes. GPL-3.0-or-later. */
+/* Front-panel taps, update scrolling and log swipes. GPL-3.0-or-later. */
 #include "touch.h"
 #include <string.h>
 #include <stdlib.h>
@@ -36,6 +36,11 @@ int am_ui_tap(AmUi *m,int x,int y) {
         }
         return ACTION_NONE;
     }
+    if (am_update_installable(&m->update) &&
+        inside(x,y,AM_UPDATE_NOTICE_X,AM_UPDATE_NOTICE_Y,AM_UPDATE_NOTICE_W,AM_UPDATE_NOTICE_H)) {
+        if (m->nav!=VIEW_UPDATES) am_ui_navigate(m,VIEW_UPDATES);
+        return ACTION_NONE;
+    }
     for (int i=0;i<AM_NAV_COUNT;++i) {
         int top=AM_NAV_Y(i)-2;
         if (inside(x,y,24,top,218,i<VIEW_REBOOT?40:42)) {
@@ -44,12 +49,15 @@ int am_ui_tap(AmUi *m,int x,int y) {
     }
     if (inside(x,y,AM_BACK_X,AM_FOOTER_Y,AM_BACK_W,AM_FOOTER_H)) return am_ui_input(m,AM_CIRCLE);
     if (inside(x,y,AM_REFRESH_X,AM_FOOTER_Y,AM_REFRESH_W,AM_FOOTER_H)) return ACTION_EXPORT;
-    if (m->nav==VIEW_LOG || m->nav==VIEW_UPDATES) {
+    if (m->nav==VIEW_LOG) {
         if (inside(x,y,AM_PREV_X,AM_FOOTER_Y,AM_PAGE_W,AM_FOOTER_H)) return am_ui_input(m,AM_LEFT);
         if (inside(x,y,AM_NEXT_X,AM_FOOTER_Y,AM_PAGE_W,AM_FOOTER_H)) return am_ui_input(m,AM_RIGHT);
-        if (m->nav==VIEW_LOG && inside(x,y,AM_CLEAR_X,AM_FOOTER_Y,AM_CLEAR_W,AM_FOOTER_H)) return am_ui_input(m,AM_TRIANGLE);
+        if (inside(x,y,AM_CLEAR_X,AM_FOOTER_Y,AM_CLEAR_W,AM_FOOTER_H)) return am_ui_input(m,AM_TRIANGLE);
     }
-    if (m->nav==VIEW_UPDATES && inside(x,y,AM_UPDATE_X,AM_UPDATE_Y,AM_UPDATE_W,AM_UPDATE_H)) return am_ui_input(m,AM_CROSS);
+    if (m->nav==VIEW_UPDATES) {
+        if (inside(x,y,AM_UPDATE_X,AM_UPDATE_Y,AM_UPDATE_W,AM_UPDATE_H)) return am_ui_input(m,AM_CROSS);
+        if (inside(x,y,AM_AUTO_UPDATE_X,AM_AUTO_UPDATE_Y,AM_AUTO_UPDATE_W,AM_AUTO_UPDATE_H)) return am_ui_input(m,AM_TRIANGLE);
+    }
     if (m->nav==VIEW_SETTINGS && inside(x,y,276,214,628,72)) {
         m->editing=1;m->field=0;return am_ui_input(m,AM_CROSS);
     }
@@ -73,11 +81,19 @@ int am_touch_sample(AmTouchState *s,AmUi *m,int contacts,int id,int x,int y) {
     if (contacts==1) {
         if (!s->active) {
             s->active=1;s->id=id;s->start_x=s->last_x=x;s->start_y=s->last_y=y;
-            s->samples=1;s->moved=0;
+            s->samples=1;s->moved=0;s->scrolling_notes=0;
         } else if (s->id!=id) am_touch_block(s);
         else {
+            int dx=x-s->start_x,dy=y-s->start_y;
+            if (!s->moved && (abs(dx)>12 || abs(dy)>12)) {
+                s->moved=1;
+                if (m->nav==VIEW_UPDATES && abs(dy)>abs(dx) &&
+                    inside(s->start_x,s->start_y,AM_UPDATE_NOTES_X,AM_UPDATE_NOTES_Y,AM_UPDATE_NOTES_W,AM_UPDATE_NOTES_H)) {
+                    s->scrolling_notes=1;
+                    am_ui_scroll_updates(m,-dy);
+                }
+            } else if (s->scrolling_notes) am_ui_scroll_updates(m,s->last_y-y);
             s->last_x=x;s->last_y=y;++s->samples;
-            if (abs(x-s->start_x)>12 || abs(y-s->start_y)>12) s->moved=1;
         }
         return ACTION_NONE;
     }
@@ -86,8 +102,8 @@ int am_touch_sample(AmTouchState *s,AmUi *m,int contacts,int id,int x,int y) {
     if (s->samples>50) return ACTION_NONE;
     int dx=s->last_x-s->start_x,dy=s->last_y-s->start_y;
     if (s->moved) {
-        if (m->clear_confirm) return ACTION_NONE;
-        if ((m->nav!=VIEW_LOG && m->nav!=VIEW_UPDATES) || s->start_x<258 || s->start_y<200 || s->start_y>=AM_CONTENT_BOTTOM) return ACTION_NONE;
+        if (m->clear_confirm || m->nav!=VIEW_LOG || s->start_x<258 || s->start_y<200 || s->start_y>=AM_CONTENT_BOTTOM)
+            return ACTION_NONE;
         if (abs(dx)>=60 && abs(dx)>abs(dy)) return am_ui_input(m,dx<0?AM_RIGHT:AM_LEFT);
         if (abs(dy)>=60 && abs(dy)>abs(dx)) return am_ui_input(m,dy<0?AM_RIGHT:AM_LEFT);
         return ACTION_NONE;

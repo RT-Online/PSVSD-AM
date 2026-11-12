@@ -33,13 +33,13 @@ static void round_rect(int x,int y,int w,int h,int radius,uint32_t c) {
 static int width(const char *s,int f) {
     int w=0;while (*s) { unsigned c=(unsigned char)*s++;if (c>=32 && c<=126) w+=ui_glyphs[ui_font_first[f]+c-32].advance; }return w;
 }
-static void text(int x,int y,int f,uint32_t c,const char *s) {
+static void clipped_text(int x,int y,int f,uint32_t c,const char *s,int top,int bottom) {
     for (;*s;++s) {
         unsigned code=(unsigned char)*s;if (code<32 || code>126) continue;
         const UiGlyph *g=&ui_glyphs[ui_font_first[f]+code-32];
         for (unsigned j=0;j<g->h;++j) for (unsigned i=0;i<g->w;++i) {
             int xx=x+g->x+(int)i,yy=y+g->y+(int)j;
-            if (xx<0 || xx>=960 || yy<0 || yy>=544) continue;
+            if (xx<0 || xx>=960 || yy<top || yy>=bottom) continue;
             unsigned a=ui_font_pixels[g->offset+j*g->w+i];if (!a) continue;
             uint32_t old=screen[yy*960+xx];
             unsigned r=((c&255)*a+(old&255)*(255-a))/255;
@@ -49,6 +49,9 @@ static void text(int x,int y,int f,uint32_t c,const char *s) {
         }
         x+=g->advance;
     }
+}
+static void text(int x,int y,int f,uint32_t c,const char *s) {
+    clipped_text(x,y,f,c,s,0,544);
 }
 static const char *wrap_line(const char *s,char *out,size_t cap,int max_width,int font) {
     size_t n=0;int w=0;
@@ -78,14 +81,37 @@ static void button(int x,int y,int w,int h,const char *label,int enabled) {
     round_rect(x,y,w,h,9,enabled?COLOR(21,61,73):CARD);
     text(x+(w-width(label,0))/2,y+(h-24)/2,0,enabled?ACCENT:MUTED,label);
 }
+static void confirmation_button(int x,int w,const char *label,int primary,int focused) {
+    uint32_t outline=focused?ACCENT:COLOR(56,85,109);
+    uint32_t fill=primary?COLOR(25,88,94):COLOR(31,48,71);
+    round_rect(x,AM_CONFIRM_Y,w,AM_CONFIRM_H,12,outline);
+    round_rect(x+2,AM_CONFIRM_Y+2,w-4,AM_CONFIRM_H-4,10,fill);
+    text(x+(w-width(label,1))/2,AM_CONFIRM_Y+17,1,TEXT,label);
+}
 unsigned am_ui_log_pages(const char *s) {
     unsigned rows=0;while (*s) { char line[256];s=wrap_line(s,line,sizeof(line),620,0);++rows; }
     return rows?(rows+AM_LOG_ROWS-1)/AM_LOG_ROWS:1;
 }
-unsigned am_ui_update_pages(const char *s) {
+static unsigned update_notes_content_height(const char *s) {
     unsigned rows=0;
-    while (*s) { char line[256];s=wrap_line(s,line,sizeof(line),600,0);++rows; }
-    return rows?(rows+AM_UPDATE_ROWS-1)/AM_UPDATE_ROWS:1;
+    while (*s) { char line[256];s=wrap_line(s,line,sizeof(line),AM_UPDATE_NOTES_W-25,0);++rows; }
+    return rows*AM_UPDATE_NOTE_LINE;
+}
+static unsigned update_notes_viewport_height(const AmUi *m) {
+    return m->message[0]?AM_UPDATE_NOTES_H-16:AM_UPDATE_NOTES_H;
+}
+int am_ui_scroll_updates(AmUi *m,int pixels) {
+    if (m->nav!=VIEW_UPDATES || m->busy || m->update_confirm || m->clear_confirm ||
+        m->update_date_notice || m->update.state==UPDATE_ERROR || m->update.state==UPDATE_DATE_ERROR)
+        return 0;
+    unsigned height=update_notes_viewport_height(m);
+    unsigned content=update_notes_content_height(m->update.notes);
+    int limit=content>height?(int)(content-height):0;
+    int offset=m->update_scroll>(unsigned)limit?limit:(int)m->update_scroll;
+    int next=pixels>limit-offset?limit:pixels<-offset?0:offset+pixels;
+    int changed=m->update_scroll!=(unsigned)next;
+    m->update_scroll=(unsigned)next;
+    return changed;
 }
 static void update_progress_view(const AmUi *m) {
     const AmUpdateProgress *p=&m->update_progress;
@@ -111,36 +137,73 @@ static void update_progress_view(const AmUi *m) {
     if (p->total) round_rect(290,420,(int)((uint64_t)594*done/p->total),12,5,ACCENT);
     else if (p->phase!=AM_UPDATE_INSTALL_ERROR) round_rect(290+(int)(m->update_animation%80)*6,420,114,12,5,ACCENT);
 }
+static void auto_update_switch(int enabled) {
+    round_rect(AM_AUTO_UPDATE_X,AM_AUTO_UPDATE_Y,AM_AUTO_UPDATE_W,AM_AUTO_UPDATE_H,9,COLOR(55,79,105));
+    round_rect(AM_AUTO_UPDATE_X+1,AM_AUTO_UPDATE_Y+1,AM_AUTO_UPDATE_W-2,AM_AUTO_UPDATE_H-2,8,COLOR(24,42,64));
+    text(AM_AUTO_UPDATE_X+13,AM_AUTO_UPDATE_Y+10,0,TEXT,"Auto-update");
+    text(AM_AUTO_UPDATE_X+141,AM_AUTO_UPDATE_Y+10,0,enabled?ACCENT:TEXT,enabled?"On":"Off");
+    int track=AM_AUTO_UPDATE_X+175;
+    round_rect(track,AM_AUTO_UPDATE_Y+13,32,17,8,enabled?COLOR(30,119,112):COLOR(66,86,110));
+    round_rect(track+(enabled?17:2),AM_AUTO_UPDATE_Y+15,13,13,6,enabled?ACCENT:TEXT);
+}
+static void release_notes(const AmUi *m) {
+    const char *notes=m->update.notes;
+    unsigned height=update_notes_viewport_height(m);
+    unsigned content=update_notes_content_height(notes);
+    unsigned limit=content>height?content-height:0;
+    unsigned offset=m->update_scroll>limit?limit:m->update_scroll;
+    const int bottom=AM_UPDATE_NOTES_Y+(int)height;
+    char line[256];
+    text(AM_UPDATE_NOTES_X,282,0,TEXT,"Release notes");
+    for (int y=AM_UPDATE_NOTES_Y-(int)offset;*notes && y<bottom;y+=AM_UPDATE_NOTE_LINE) {
+        notes=wrap_line(notes,line,sizeof(line),AM_UPDATE_NOTES_W-25,0);
+        if (y+AM_UPDATE_NOTE_LINE>AM_UPDATE_NOTES_Y)
+            clipped_text(AM_UPDATE_NOTES_X,y,0,TEXT,line,AM_UPDATE_NOTES_Y,bottom);
+    }
+    if (limit) {
+        int thumb=(int)(height*height/content);
+        if (thumb<22) thumb=22;
+        int x=AM_UPDATE_NOTES_X+AM_UPDATE_NOTES_W-6;
+        int y=AM_UPDATE_NOTES_Y+(int)(offset*(height-(unsigned)thumb)/limit);
+        round_rect(x,AM_UPDATE_NOTES_Y,6,(int)height,3,COLOR(40,64,90));
+        round_rect(x,y,6,thumb,3,ACCENT);
+    }
+}
 static void updates_view(const AmUi *m) {
     title("Updates","Official releases from RT-Online/PSVSD-AM");
-    char action[64];snprintf(action,sizeof(action),"Update to %s",m->update.version);
-    button(AM_UPDATE_X,AM_UPDATE_Y,AM_UPDATE_W,AM_UPDATE_H,
-        m->update.state==UPDATE_INSTALLING?"Updating...":m->update.state==UPDATE_AVAILABLE && m->update.asset_url[0]?action:"Check for Updates",!m->busy && m->update.state!=UPDATE_CHECKING);
-    if (m->update.state==UPDATE_INSTALLING) { update_progress_view(m);return; }
-    round_rect(270,205,640,257,12,CARD);
     const AmUpdate *u=&m->update;
-    const char *state=u->state==UPDATE_UNCHECKED?"Check for a newer public release.":
-        u->state==UPDATE_OFFLINE?"Updates not checked.":
-        u->state==UPDATE_CHECKING?"Checking Wi-Fi and GitHub...":u->message;
+    int available=am_update_installable(u);
+    char action[64];snprintf(action,sizeof(action),"Update to %s",u->version);
+    if (width(action,0)>AM_UPDATE_W-16) strcpy(action,"Install Update");
+    button(AM_UPDATE_X,AM_UPDATE_Y,AM_UPDATE_W,AM_UPDATE_H,
+        u->state==UPDATE_INSTALLING?"Updating...":available?action:"Check for Updates",!m->busy && u->state!=UPDATE_CHECKING);
+    if (u->state==UPDATE_INSTALLING) { update_progress_view(m);return; }
+    round_rect(270,205,640,257,12,CARD);
     int failed=u->state==UPDATE_ERROR || u->state==UPDATE_DATE_ERROR;
-    wrapped(290,220,state,600,2,1,failed?BAD:ACCENT);
+    const char *state=u->message;
+    switch (u->state) {
+        case UPDATE_UNCHECKED:state="Check for updates";break;
+        case UPDATE_OFFLINE:state="Updates not checked";break;
+        case UPDATE_CHECKING:state="Checking for updates...";break;
+        case UPDATE_AVAILABLE:state=available?"Update available":"Release VPK unavailable";break;
+        case UPDATE_CURRENT:state="Up to date";break;
+        case UPDATE_AHEAD:state="Installed version is newer";break;
+        case UPDATE_ERROR:case UPDATE_DATE_ERROR:state="Update failed";break;
+    }
+    wrapped(290,213,state,368,1,1,failed?BAD:ACCENT);
+    auto_update_switch(m->auto_update);
     char info[128];
     snprintf(info,sizeof(info),"Installed: %s    Latest: %s",ACCESSORY_VERSION,u->version[0]?u->version:"Not checked");
-    text(290,284,0,TEXT,info);
+    wrapped(290,245,info,368,1,0,MUTED);
+    rect(290,273,600,1,BORDER);
     if (failed) {
         char diagnostic[640];am_update_diagnostic(u,diagnostic,sizeof(diagnostic));
-        wrapped(290,312,diagnostic,600,6,0,TEXT);
+        int y=wrapped(290,282,u->message,600,2,0,TEXT);
+        wrapped(290,y,diagnostic,600,(454-y)/AM_UPDATE_NOTE_LINE,0,TEXT);
     } else if (u->notes[0]) {
-        const char *s=u->notes;unsigned row=0;
-        while (*s) {
-            char line[256];s=wrap_line(s,line,sizeof(line),600,0);
-            if (row/AM_UPDATE_ROWS==m->update_page) text(290,316+(int)(row%AM_UPDATE_ROWS)*24,0,TEXT,line);
-            ++row;
-        }
-        snprintf(info,sizeof(info),"Release notes: page %u of %u",m->update_page+1,am_ui_update_pages(u->notes));
-        text(290,441,0,MUTED,info);
+        release_notes(m);
     } else {
-        wrapped(290,326,"Checks quietly at launch when Wi-Fi is connected.\nInstallation is optional and requires confirmation.",600,3,0,MUTED);
+        wrapped(290,282,"Checks at launch when Wi-Fi is connected.",600,2,0,MUTED);
     }
 }
 static void overview(const AmUi *m) {
@@ -287,13 +350,8 @@ static void clear_log_confirmation(const AmUi *m) {
     text(284,177,2,TEXT,"Are you sure?");
     wrapped(284,238,"Clear saved diagnostic logs and exported reports?",604,2,1,TEXT);
     text(284,310,0,MUTED,"Mount settings are kept. New events will still be logged.");
-    const char *choices[]={"Clear Log","Cancel"};
-    for (int i=0;i<2;++i) {
-        int x=i?AM_CANCEL_X:AM_CONFIRM_X;
-        round_rect(x,AM_CONFIRM_Y,AM_CONFIRM_W,AM_CONFIRM_H,12,i?CARD:COLOR(23,61,74));
-        if (m->clear_choice==i) rect(x+12,AM_CONFIRM_Y+AM_CONFIRM_H-5,AM_CONFIRM_W-24,2,ACCENT);
-        text(x+(AM_CONFIRM_W-width(choices[i],1))/2,AM_CONFIRM_Y+17,1,m->clear_choice==i?ACCENT:MUTED,choices[i]);
-    }
+    confirmation_button(AM_CONFIRM_X,AM_CONFIRM_W,"Clear Log",1,m->clear_choice==0);
+    confirmation_button(AM_CANCEL_X,AM_CONFIRM_W,"Cancel",0,m->clear_choice==1);
 }
 static void update_date_notice(void) {
     round_rect(258,154,666,300,18,BORDER);round_rect(260,156,662,296,16,PANEL);
@@ -301,7 +359,24 @@ static void update_date_notice(void) {
     wrapped(284,246,"Open Settings > Date & Time > Date & Time Settings.\n"
         "Choose Set via Internet > Set Now, or set it manually.\n"
         "Return to PSVSD/AM and check for updates again.",604,3,0,TEXT);
-    button(AM_DATE_OK_X,AM_CONFIRM_Y,AM_DATE_OK_W,AM_CONFIRM_H,"OK",1);
+    confirmation_button(AM_DATE_OK_X,AM_DATE_OK_W,"OK",1,1);
+}
+static void update_confirmation(const AmUi *m) {
+    for (unsigned i=0;i<960*544;++i) {
+        uint32_t c=screen[i];
+        screen[i]=COLOR((c&255)*56/100,((c>>8)&255)*56/100,((c>>16)&255)*56/100);
+    }
+    round_rect(258,170,666,284,18,COLOR(55,79,105));
+    round_rect(260,172,662,280,16,PANEL);
+    text(284,190,2,TEXT,"Install update?");
+    char prompt[96];
+    snprintf(prompt,sizeof(prompt),"Download and install PSVSD/AM %s?",m->update.version);
+    int y=wrapped(284,239,prompt,604,2,1,TEXT);
+    text(284,y+5,0,MUTED,"PSVSD/AM will reopen when installation finishes.");
+    text(284,y+36,0,MUTED,"Saved mount settings carry over.");
+    confirmation_button(AM_CONFIRM_X,AM_CONFIRM_W,"Install Update",1,m->update_choice==0);
+    confirmation_button(AM_CANCEL_X,AM_CONFIRM_W,"Cancel",0,m->update_choice==1);
+    text(32,501,0,TEXT,"Left / Right to select   X to confirm   O to cancel");
 }
 static void copy_view(const AmUi *m) {
     const AmCopyProgress *p=&m->copy;char b[160];
@@ -319,6 +394,8 @@ void am_ui_render(uint32_t *pixels,const AmUi *m) {
     for (int y=0;y<544;++y) rect(0,y,960,1,COLOR(8+(544-y)/120,15+(544-y)/90,27+(544-y)/65));
     text(32,20,3,TEXT,"PSVSD");text(32+width("PSVSD",3),20,3,ACCENT,"/AM");
     text(34,75,0,MUTED,"Accessory Storage Mount");
+    if (am_update_installable(&m->update))
+        button(AM_UPDATE_NOTICE_X,AM_UPDATE_NOTICE_Y,AM_UPDATE_NOTICE_W,AM_UPDATE_NOTICE_H,"Update Available",!m->busy);
     pill(816,36,"v" ACCESSORY_VERSION,0);rect(26,106,908,1,BORDER);
     const char *items[]={"Overview","Mount setup","Read / write test","Log","Updates","Credits","Reboot","Exit"};
     for (int i=0;i<AM_NAV_COUNT;++i) {
@@ -345,25 +422,14 @@ void am_ui_render(uint32_t *pixels,const AmUi *m) {
     }
     if (m->update_date_notice) update_date_notice();
     else if (m->clear_confirm) clear_log_confirmation(m);
-    else if (m->update_confirm) {
-        round_rect(258,154,666,300,18,BORDER);round_rect(260,156,662,296,16,PANEL);
-        text(284,177,2,TEXT,"Install update?");
-        char b[160];snprintf(b,sizeof(b),"Download and install %s? The app will close and reopen.",m->update.version);
-        wrapped(284,238,b,604,3,1,TEXT);
-        text(284,320,0,MUTED,"Saved mount settings are retained. No update is forced.");
-        const char *labels[]={"Install Update","Cancel"};
-        for (int i=0;i<2;++i) {
-            int x=i?AM_CANCEL_X:AM_CONFIRM_X;
-            round_rect(x,AM_CONFIRM_Y,AM_CONFIRM_W,AM_CONFIRM_H,12,i?CARD:COLOR(23,61,74));
-            if (m->update_choice==i) rect(x+12,AM_CONFIRM_Y+AM_CONFIRM_H-5,AM_CONFIRM_W-24,2,ACCENT);
-            text(x+(AM_CONFIRM_W-width(labels[i],1))/2,AM_CONFIRM_Y+17,1,m->update_choice==i?ACCENT:MUTED,labels[i]);
-        }
-    }
     rect(26,AM_FOOTER_Y,908,1,BORDER);
-    text(32,501,0,MUTED,m->nav==VIEW_LOG?"Triangle: clear log":m->touch_available?"Touch + D-pad":"D-pad / X / O");
-    if (m->nav==VIEW_UPDATES) {
-        button(AM_PREV_X,AM_FOOTER_BUTTON_Y,AM_PAGE_W,AM_FOOTER_BUTTON_H,"Prev",!m->busy && m->update_page>0);
-        button(AM_NEXT_X,AM_FOOTER_BUTTON_Y,AM_PAGE_W,AM_FOOTER_BUTTON_H,"Next",!m->busy && m->update_page+1<am_ui_update_pages(m->update.notes));
+    if (m->nav==VIEW_UPDATES && !m->busy && !m->update_confirm && !m->update_date_notice) {
+        int scrollable=update_notes_content_height(m->update.notes)>update_notes_viewport_height(m);
+        if (scrollable)
+            text(32,501,0,MUTED,m->touch_available?"Swipe or Left / Right to scroll":"Left / Right to scroll");
+        text(scrollable?344:32,501,0,MUTED,"Triangle toggles Auto-update");
+    } else if (!m->update_confirm) {
+        text(32,501,0,MUTED,m->nav==VIEW_LOG?"Triangle: clear log":m->touch_available?"Touch + D-pad":"D-pad / X / O");
     }
     if (m->nav==VIEW_LOG) {
         button(AM_PREV_X,AM_FOOTER_BUTTON_Y,AM_PAGE_W,AM_FOOTER_BUTTON_H,"Prev",!m->clear_confirm && m->log_page>0);
@@ -372,4 +438,5 @@ void am_ui_render(uint32_t *pixels,const AmUi *m) {
     }
     button(AM_REFRESH_X,AM_FOOTER_BUTTON_Y,AM_REFRESH_W,AM_FOOTER_BUTTON_H,m->nav==VIEW_LOG?"Export log":"Refresh",!m->busy && !m->clear_confirm);
     button(AM_BACK_X,AM_FOOTER_BUTTON_Y,AM_BACK_W,AM_FOOTER_BUTTON_H,"Back",!m->busy);
+    if (m->update_confirm && !m->update_date_notice && !m->clear_confirm) update_confirmation(m);
 }

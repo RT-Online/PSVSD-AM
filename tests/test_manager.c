@@ -307,6 +307,18 @@ int main(void) {
     put(AM_SETTINGS_PATH,"version=1\nenabled=0\nmount=ux0\n");
     assert(am_load_settings(&s)==0 && !s.enabled && s.target==AM_UX0);
     reset();put(AM_SETTINGS_PATH,"invalid");assert(am_load_settings(&s)<0 && !s.enabled);
+    reset();assert(!am_load_auto_update());
+    assert(am_save_auto_update(0)==0);
+    put(AM_AUTO_UPDATE_PATH,"1\ninvalid");assert(!am_load_auto_update());
+    cfg.fail_rename=AM_AUTO_UPDATE_PATH;
+    assert(am_save_auto_update(1)<0 && !am_load_auto_update());
+    assert(am_save_auto_update(1)==0 && am_load_auto_update());
+    assert(am_save_auto_update(1)==0 && am_load_auto_update());
+    cfg.fail_remove=AM_AUTO_UPDATE_PATH;
+    assert(am_save_auto_update(0)<0 && am_load_auto_update());
+    cfg.fail_remove=NULL;
+    assert(am_save_auto_update(0)==0 && !am_load_auto_update());
+    assert(!local_exists(AM_SETTINGS_PATH) && !local_exists(AM_BOOT_PLUGIN));
     reset();s=(AmSettings){1,AM_UMA0};assert(am_save_settings(&s,message,sizeof(message))==0);
     assert(am_load_settings(&s)==0 && s.enabled && s.target==AM_UMA0);
     get(AM_TAI_CONFIG,out);assert(strstr(out,AM_BOOT_PLUGIN) && strstr(out,"nonpdrm.skprx") && strstr(out,"custom.suprx"));

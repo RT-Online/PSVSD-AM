@@ -22,6 +22,7 @@ static AmUpdate update_result;
 static int update_thread=-1;
 static unsigned update_done;
 static int update_quiet,update_installing;
+enum { UPDATE_FINISH_NONE,UPDATE_FINISH_DATE_NOTICE,UPDATE_FINISH_STARTUP };
 static AmUpdate install_release;
 static unsigned progress_sequence,progress_phase,progress_done,progress_total;
 /* Worker publishes scalar atomics; only the main thread touches the UI model. */
@@ -304,7 +305,7 @@ static void check_updates(int quiet) {
         snprintf(model.message,sizeof(model.message),"Please wait a minute between GitHub checks.");return;
     }
     if (!quiet) model.message[0]=0;
-    model.busy=!quiet;model.update_page=0;
+    model.busy=!quiet;model.update_scroll=0;
     memset(&model.update,0,sizeof(model.update));model.update.state=UPDATE_CHECKING;
     __atomic_store_n(&update_done,0,__ATOMIC_RELAXED);draw();
     update_thread=sceKernelCreateThread("PSVSDAMUpdates",update_worker,0x10000100,0x10000,0,0,NULL);
@@ -319,7 +320,7 @@ static void check_updates(int quiet) {
     }
 }
 static int finish_update_check(void) {
-    if (update_thread<0 || !__atomic_load_n(&update_done,__ATOMIC_ACQUIRE)) return 0;
+    if (update_thread<0 || !__atomic_load_n(&update_done,__ATOMIC_ACQUIRE)) return UPDATE_FINISH_NONE;
     sceKernelWaitThreadEnd(update_thread,NULL,NULL);sceKernelDeleteThread(update_thread);update_thread=-1;
     model.update=update_result;model.busy=0;redraw=1;
     if (model.update.state==UPDATE_DATE_ERROR) last_update_check=0;
@@ -341,20 +342,30 @@ static int finish_update_check(void) {
     else {
         am_log("Launch update check: state=%d latest=%s error=%08X TLS verify=%08X\n",
             model.update.state,model.update.version,(unsigned)model.update.error,(unsigned)model.update.tls_verify);
-        if (model.update.state==UPDATE_AVAILABLE && !model.message[0])
-            snprintf(model.message,sizeof(model.message),"Update %s available. Open Updates to install.",model.update.version);
     }
     if (model.update.state==UPDATE_DATE_ERROR) {
         model.update_date_notice=1;
         am_touch_block(&touch_state);
-        return 1;
+        return UPDATE_FINISH_DATE_NOTICE;
     }
-    return 0;
+    return update_quiet?UPDATE_FINISH_STARTUP:UPDATE_FINISH_NONE;
+}
+static void toggle_auto_update(void) {
+    int enabled=!model.auto_update;
+    int ret=am_save_auto_update(enabled);
+    if (ret<0) {
+        snprintf(model.message,sizeof(model.message),"Could not save Auto-update (%08X). See Log.",(unsigned)ret);
+        am_log("Auto-update preference save failed: %08X\n",(unsigned)ret);
+        return;
+    }
+    model.auto_update=enabled;
+    model.message[0]=0;
 }
 static void install_update(void) {
     if (update_thread>=0) return;
     if (model.dirty) { snprintf(model.message,sizeof(model.message),"Save or discard pending mount changes before updating.");return; }
-    if (model.update.state!=UPDATE_AVAILABLE || !model.update.asset_url[0]) return;
+    if (!am_update_installable(&model.update)) return;
+    if (model.nav!=VIEW_UPDATES) am_ui_navigate(&model,VIEW_UPDATES);
     sceIoMkdir(AM_UPDATE_ROOT,0777);
     update_progress(NULL,AM_UPDATE_DOWNLOAD,0,0);model.update_progress=(AmUpdateProgress){AM_UPDATE_DOWNLOAD,0,0};
     install_release=model.update;update_installing=1;update_quiet=0;model.busy=1;model.update.state=UPDATE_INSTALLING;
@@ -395,6 +406,7 @@ int main(void) {
     else if (cleanup<0) am_log("Temporary installer cleanup on return failed: %08X\n",(unsigned)cleanup);
     if (init_display(resumed>0)<0) return 1;
     int loaded=am_load_settings(&model.saved);model.pending=model.saved;
+    model.auto_update=am_load_auto_update();
     if (loaded<0) snprintf(model.message,sizeof(model.message),"Settings unreadable; automatic mounting defaults off.");
     am_log("Data path migration: %08X\n",(unsigned)migrated);
     if (migrated<0) snprintf(model.message,sizeof(model.message),"Data migration incomplete. Existing files retained. See Log.");
@@ -429,8 +441,10 @@ int main(void) {
     am_touch_block(&touch_state);
     am_log("Front touch: sampling=%08X panel=%08X bounds=%d,%d..%d,%d enabled=%d\n",
            (unsigned)touch_start,(unsigned)touch_info,panel.minDispX,panel.minDispY,panel.maxDispX,panel.maxDispY,model.touch_available);
+    int installer_return=resumed!=0;
     FILE *installed=fopen(AM_UPDATE_ROOT "/result","rb");
     if (installed) {
+        installer_return=1;
         char result[16]={0};fread(result,1,8,installed);fclose(installed);
         remove(AM_UPDATE_ROOT "/result");
         am_log("Installer result: %s\n",result);
@@ -438,14 +452,14 @@ int main(void) {
         else snprintf(model.message,sizeof(model.message),"Update installation failed (%s). See Log.",result);
     }
     check_updates(1);
-    unsigned previous=0,ticks=0;int exiting=0;
+    unsigned previous=0,ticks=0,scroll_hold=0;int exiting=0;
     while (!exiting) {
         if (update_installing) { poll_update_progress();model.update_animation=(model.update_animation+1)%1000;if (model.update_animation%5==0) redraw=1; }
         poll_speed_test();
-        int date_notice_opened=speed_thread<0?finish_update_check():0;
+        int update_finish=speed_thread<0?finish_update_check():UPDATE_FINISH_NONE;
         if (redraw) draw();
         SceCtrlData pad;memset(&pad,0,sizeof(pad));sceCtrlPeekBufferPositive(0,&pad,1);
-        unsigned pressed=date_notice_opened?0:(pad.buttons&~previous);previous=pad.buttons;
+        unsigned pressed=update_finish==UPDATE_FINISH_DATE_NOTICE?0:(pad.buttons&~previous);previous=pad.buttons;
         unsigned keys=0;
         if (pressed&SCE_CTRL_UP) keys|=AM_UP;
         if (pressed&SCE_CTRL_DOWN) keys|=AM_DOWN;
@@ -456,30 +470,47 @@ int main(void) {
         if (pressed&SCE_CTRL_SQUARE) keys|=AM_SQUARE;
         if (pressed&SCE_CTRL_TRIANGLE) keys|=AM_TRIANGLE;
         if (keys) redraw=1;
+        int held_scroll=0;
+        if (!keys && model.nav==VIEW_UPDATES && !model.busy && !model.update_confirm && !model.update_date_notice &&
+            (pad.buttons==SCE_CTRL_LEFT || pad.buttons==SCE_CTRL_RIGHT)) {
+            if (scroll_hold<12) ++scroll_hold;
+            else held_scroll=am_ui_scroll_updates(&model,pad.buttons==SCE_CTRL_LEFT?-8:8);
+        } else scroll_hold=0;
+        if (held_scroll) redraw=1;
         int previous_view=model.nav;
+        int was_touching=touch_state.active;
+        int touch_input=was_touching;
         int action=am_ui_input(&model,keys);
-        if (keys) am_touch_block(&touch_state);
+        if (keys || held_scroll) am_touch_block(&touch_state);
         else if (model.touch_available) {
             SceTouchData data;memset(&data,0,sizeof(data));
             int read=sceTouchPeek(SCE_TOUCH_PORT_FRONT,&data,1);
             if (read<0) am_touch_block(&touch_state);
             else if (read>0) {
                 int x=0,y=0,contacts=(int)data.reportNum,id=0;
+                touch_input|=contacts>0;
                 if (contacts==1) {
                     id=data.report[0].id;
                     if (!am_touch_point(&touch_bounds,data.report[0].x,data.report[0].y,&x,&y)) contacts=-1;
                 }
-                int active=touch_state.active;
+                unsigned scroll=model.update_scroll;
                 action=am_touch_sample(&touch_state,&model,contacts,id,x,y);
-                if (active!=touch_state.active || !contacts) redraw=redraw || active;
+                if ((was_touching && !touch_state.active) || scroll!=model.update_scroll) redraw=1;
             }
         }
         if (model.nav==VIEW_LOG && previous_view!=VIEW_LOG) {
             refresh_log();model.log_page=am_ui_log_pages(model.log)-1;
         }
+        /* Only a normal startup check can start an automatic installation. */
+        if (update_finish==UPDATE_FINISH_STARTUP && !installer_return && action==ACTION_NONE &&
+            !pad.buttons && !touch_input && am_ui_auto_update_ready(&model)) {
+            am_log("Auto-update starting verified release %s.\n",model.update.version);
+            action=ACTION_INSTALL_UPDATE;
+        }
         if (action!=ACTION_NONE) redraw=1;
         if (action==ACTION_CHECK_UPDATES) check_updates(0);
         else if (action==ACTION_INSTALL_UPDATE) install_update();
+        else if (action==ACTION_TOGGLE_AUTO_UPDATE) toggle_auto_update();
         else if (action==ACTION_TEST) test();
         else if (action==ACTION_SPEED_TEST) start_speed_test();
         else if (action==ACTION_LOG) refresh_log();

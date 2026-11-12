@@ -37,6 +37,8 @@ typedef struct {
 int am_read_text(const char *path,char *out,size_t cap);
 int am_read_log(const char *path,char *out,size_t cap);
 int am_load_settings(AmSettings *s);
+int am_load_auto_update(void);
+int am_save_auto_update(int enabled);
 int am_save_settings_with_callbacks(const AmSettings *s,const AmSaveCallbacks *callbacks,char *message,size_t cap);
 int am_tai_transform(const char *input,int enabled,char *out,size_t cap);
 int am_replace_file(const char *path,const void *bytes,size_t size);

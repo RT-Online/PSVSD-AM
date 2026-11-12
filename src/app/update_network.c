@@ -280,9 +280,7 @@ int am_update_download(const AmUpdate *release,const char *path,AmUpdate *out,Am
     out->state=UPDATE_ERROR;
     snprintf(out->stage,sizeof(out->stage),"Download release VPK");
     if (progress) progress(context,AM_UPDATE_DOWNLOAD,0,0);
-    if (release->state!=UPDATE_AVAILABLE ||
-        strncmp(release->asset_url,AM_RELEASE_DOWNLOAD_PREFIX,sizeof(AM_RELEASE_DOWNLOAD_PREFIX)-1) ||
-        strlen(release->sha256)!=64) {
+    if (!am_update_installable(release)) {
         snprintf(out->reason,sizeof(out->reason),"Verified release asset unavailable.");
         goto done;
     }

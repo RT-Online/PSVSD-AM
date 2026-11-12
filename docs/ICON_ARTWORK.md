@@ -2,8 +2,8 @@
 
 The flat teal microSD icon uses navy `#102137` and teal `#46dcc7`. It shows
 PSVSD/AM, the major and minor version, and Accessory Storage Mount. The bubble,
-LiveArea background and startup art display `1.2` for all `1.2.x` releases.
-The app and package metadata retain the exact release version.
+LiveArea background and startup art display `1.3` for the `1.3.x` series.
+The app and AM_VERSION metadata show the full release version.
 
 `tools/make_assets.py` generates the editable SVG, indexed 128 px icon and
 matching LiveArea images. The SVG and raster drawing share the same geometry.

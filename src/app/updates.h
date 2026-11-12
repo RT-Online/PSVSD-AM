@@ -29,6 +29,7 @@ typedef struct {
     int (*get)(void *ctx,char *body,size_t cap,size_t *used,int *http_status);
 } AmUpdateTransport;
 int am_update_parse(const char *json,size_t size,const char *current,AmUpdate *out);
+int am_update_installable(const AmUpdate *release);
 void am_update_check_with_transport(AmUpdate *out,const char *current,const AmUpdateTransport *transport);
 void am_update_check(AmUpdate *out);
 int am_update_download(const AmUpdate *release,const char *path,AmUpdate *out,AmUpdateProgressCallback progress,void *context);

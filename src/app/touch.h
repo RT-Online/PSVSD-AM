@@ -3,7 +3,7 @@
 #include "ui.h"
 typedef struct { int min_x,min_y,max_x,max_y; } AmTouchBounds;
 typedef struct {
-    int waiting,active,id,start_x,start_y,last_x,last_y,moved;
+    int waiting,active,id,start_x,start_y,last_x,last_y,moved,scrolling_notes;
     unsigned samples;
 } AmTouchState;
 void am_touch_block(AmTouchState *state);
@@ -15,7 +15,18 @@ int am_ui_tap(AmUi *ui,int x,int y);
 #define AM_UPDATE_Y 126
 #define AM_UPDATE_W 202
 #define AM_UPDATE_H 42
-#define AM_UPDATE_ROWS 5
+#define AM_UPDATE_NOTICE_X 620
+#define AM_UPDATE_NOTICE_Y 32
+#define AM_UPDATE_NOTICE_W 180
+#define AM_UPDATE_NOTICE_H 36
+#define AM_AUTO_UPDATE_X 670
+#define AM_AUTO_UPDATE_Y 214
+#define AM_AUTO_UPDATE_W 220
+#define AM_AUTO_UPDATE_H 44
+#define AM_UPDATE_NOTES_X 290
+#define AM_UPDATE_NOTES_Y 310
+#define AM_UPDATE_NOTES_W 595
+#define AM_UPDATE_NOTES_H 144
 #define AM_FOOTER_Y 480
 #define AM_FOOTER_H 64
 #define AM_FOOTER_BUTTON_Y 492

@@ -196,6 +196,11 @@ int am_update_parse(const char *json,size_t size,const char *current,AmUpdate *o
     if (!result.notes[0]) snprintf(result.notes,sizeof(result.notes),"No release notes published.");
     *out=result;return 0;
 }
+int am_update_installable(const AmUpdate *release) {
+    return release->state==UPDATE_AVAILABLE &&
+        !strncmp(release->asset_url,AM_RELEASE_DOWNLOAD_PREFIX,sizeof(AM_RELEASE_DOWNLOAD_PREFIX)-1) &&
+        !release->sha256[64] && strspn(release->sha256,"0123456789abcdef")==64;
+}
 void am_update_check_with_transport(AmUpdate *out,const char *current,const AmUpdateTransport *transport) {
     memset(out,0,sizeof(*out));
     if (transport->wifi(transport->ctx)<=0) {

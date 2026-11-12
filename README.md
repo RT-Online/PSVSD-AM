@@ -4,9 +4,9 @@
 
 AI tools assisted with code development, documentation, and testing. RefurbedTech directed development and performed hardware testing.
 
-Version **1.2.10** · Vita title ID **RTPSV0001** · Package version **01.30**
+Version **1.3.0** · Vita title ID **RTPSV0001** · Package version **01.32**
 
-The launcher displays the `1.2` series. The app and update metadata show `1.2.10`.
+The launcher displays the `1.3` series. The app and update metadata show `1.3.0`.
 See [the Vita test guide](docs/UPDATE_TEST.md) for update, reboot and speed checks.
 
 ## Features
@@ -16,7 +16,7 @@ See [the Vita test guide](docs/UPDATE_TEST.md) for update, reboot and speed chec
 - Sequential and 4 KiB random read/write benchmarks on the verified PSVSD mount.
 - Event-driven standby recovery for the owned USB mapping.
 - Touch and controller navigation, diagnostic export, and confirmed log clearing.
-- On-demand GitHub release checks, with Wi-Fi detection and paged release notes.
+- GitHub release checks, scrollable release notes and optional automatic installation.
 - Storage-plugin conflict checks and backed-up configuration changes.
 - Verified copying of PSVSD/AM and VitaShell before switching to USB main storage.
 
@@ -40,9 +40,8 @@ This mirrors the source folders exactly; it does not remove obsolete files alrea
 
 ## Controls
 
-Popup confirmation buttons use teal backgrounds and Cancel buttons use dark
-backgrounds, with original text colors. An underline indicates selection;
-actions and default Cancel choices are unchanged.
+Confirmation dialogs use bright labels for both actions. The primary action has
+a teal background. The outline indicates the controller selection.
 
 Use the sidebar or D-pad to navigate. Cross activates choices; Circle/Back returns to the previous menu and never exits the app. Reboot and Exit each offer a save option and a proceed-without-save option. Square exports the report. On Log, Triangle opens Clear Log with Cancel selected by default.
 
@@ -57,7 +56,8 @@ caching. Results are shown on the page and saved in Log.
 
 ## Configuration and recovery
 
-- Settings: `ur0:data/PSVSD_AM/settings.ini`
+- Mount settings: `ur0:data/PSVSD_AM/settings.ini`
+- Auto-update preference: `ur0:data/PSVSD_AM/auto-update` when enabled
 - Boot plugin: `ur0:tai/psvsd_am.skprx`
 - Kernel/application logs: `ur0:data/PSVSD_AM/`
 - Exported report: `ux0:data/PSVSD_AM/test.log`
@@ -94,20 +94,26 @@ GPL-3.0-or-later; see [COPYING](COPYING) and [third-party notices](docs/THIRD_PA
 ## Check for updates
 
 The app checks the latest stable GitHub release over HTTPS once at launch when
-Wi-Fi is connected. You can keep using the app during the check. A newer release
-is noted on Overview and on the Updates page.
+Wi-Fi is connected. You can keep using the app during the check. When a newer
+release has a downloadable VPK, tap **Update Available** next to the version
+badge to open **Updates**.
 
 If an HTTPS certificate fails its date check, PSVSD/AM opens a clock notice. Open
 **Settings → Date & Time → Date & Time Settings** on the Vita and choose
 **Set via Internet → Set Now** or **Set Manually**. Then return to the app and
 select **Check for Updates**.
 
-Open **Updates** to read release notes. Select **Update to [version]** and confirm
-**Install Update** to download and install; Cancel is selected initially. Pending
-mount edits must be saved or discarded first. A manual **Check for Updates**
-button remains when no installable newer version is available. Checks usually
-have a one-minute cooldown. You can retry immediately after a date error. Use
-Left/Right or swipe to browse notes.
+Swipe the release notes or use **Left / Right** to scroll. Select
+**Update to [version]** and confirm **Install Update** to download and install.
+Cancel is selected initially. Save or discard pending mount edits first.
+**Check for Updates** usually has a one-minute cooldown. You can retry
+immediately after a date error.
+
+**Auto-update** defaults to **Off**. Tap the switch or press Triangle in
+**Updates** to change it. The setting saves immediately. When enabled, the app
+starts installing a verified update after the launch check if the app is idle
+and mount settings have no pending edits. The **Update Available** notice lets
+you install manually if the app is busy when the check completes.
 
 The updater checks the VPK SHA-256 before extracting into its staging directory.
 It verifies ZIP CRCs and app and installer metadata before handing off to the
@@ -131,8 +137,8 @@ monotonically increasing NN.NN package revision. Both app and helper carry
 AM_VERSION so installation validates the exact release tag and matching package.
 
 The installed version controls the launch of the temporary installer. The helper
-from the downloaded VPK controls the return. An in-app upgrade from 1.2.9
-exercises the new return sequence.
+from the downloaded VPK controls the return. An in-app upgrade from 1.2.11
+exercises the full handoff.
 
 ### Switching storage in either direction
 

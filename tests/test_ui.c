@@ -1,8 +1,9 @@
 #include <assert.h>
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
-#include "../src/app/ui.h"
+#include "../src/app/touch.h"
 
 static struct { uint32_t before[16];uint32_t pixels[960*544];uint32_t after[16]; } buffer;
 static void dump(const char *dir,const char *name) {
@@ -105,14 +106,38 @@ int main(int argc,char **argv) {
     m.update.state=UPDATE_AVAILABLE;strcpy(m.update.version,"v1.0.4");
     strcpy(m.update.message,"A newer release is available.");
     for (unsigned i=0;i<3000;++i) m.update.notes[i]=i%60==59?'\n':'A';
-    m.update.notes[3000]=0;unsigned update_pages=am_ui_update_pages(m.update.notes);assert(update_pages>1);
-    for (m.update_page=0;m.update_page<update_pages;++m.update_page) am_ui_render(buffer.pixels,&m);
-    m.update_page=0;am_ui_input(&m,AM_RIGHT);assert(m.update_page==1);
-    am_ui_input(&m,AM_LEFT);assert(!m.update_page);
+    m.update.notes[3000]=0;
+    am_ui_input(&m,AM_RIGHT);assert(m.update_scroll==AM_UPDATE_NOTE_LINE);
+    am_ui_input(&m,AM_RIGHT);assert(m.update_scroll==2*AM_UPDATE_NOTE_LINE);
+    am_ui_render(buffer.pixels,&m);
+    assert(am_ui_scroll_updates(&m,INT_MAX) && m.update_scroll>2*AM_UPDATE_NOTE_LINE);
+    assert(!am_ui_scroll_updates(&m,INT_MAX));
+    am_ui_render(buffer.pixels,&m);
+    assert(am_ui_scroll_updates(&m,INT_MIN) && !m.update_scroll);
+    am_ui_input(&m,AM_LEFT);assert(!m.update_scroll);
+    assert(am_ui_input(&m,AM_TRIANGLE)==ACTION_TOGGLE_AUTO_UPDATE);
     for (unsigned i=0;i<16;++i) assert(buffer.before[i]==0xDEADBEEF && buffer.after[i]==0xDEADBEEF);
     memset(&m,0,sizeof(m));m.nav=VIEW_UPDATES;m.update.state=UPDATE_AVAILABLE;
     strcpy(m.update.version,"v1.2.3");strcpy(m.update.asset_url,"https://github.com/RT-Online/PSVSD-AM/releases/download/v1.2.3/app.vpk");
+    assert(am_ui_input(&m,AM_CROSS)==ACTION_CHECK_UPDATES && !m.update_confirm);
+    m.nav=VIEW_OVERVIEW;
+    am_ui_render(buffer.pixels,&m);
+    unsigned banner_pixel=(AM_UPDATE_NOTICE_Y+8)*960+AM_UPDATE_NOTICE_X+12;
+    uint32_t background=buffer.pixels[banner_pixel];
+    memset(m.update.sha256,'a',64);
+    am_ui_render(buffer.pixels,&m);assert(buffer.pixels[banner_pixel]!=background);
+    if (argc>1) dump(argv[1],"UpdateNotice");
+    assert(!am_ui_auto_update_ready(&m));
+    m.auto_update=1;assert(am_ui_auto_update_ready(&m));
+    m.dirty=1;assert(!am_ui_auto_update_ready(&m));m.dirty=0;
+    m.editing=1;assert(!am_ui_auto_update_ready(&m));m.editing=0;
+    m.reboot_pending=1;assert(!am_ui_auto_update_ready(&m));m.reboot_pending=0;
+    m.busy=1;assert(!am_ui_auto_update_ready(&m));m.busy=0;
+    m.nav=VIEW_REBOOT;assert(!am_ui_auto_update_ready(&m));
+    m.nav=VIEW_UPDATES;
     assert(am_ui_input(&m,AM_CROSS)==ACTION_NONE && m.update_confirm && m.update_choice==1);
+    assert(!am_ui_auto_update_ready(&m));
+    assert(am_ui_input(&m,AM_TRIANGLE)==ACTION_NONE && m.update_confirm);
     am_ui_render(buffer.pixels,&m);if (argc>1) dump(argv[1],"UpdateConfirm");
     assert(am_ui_input(&m,AM_CROSS)==ACTION_NONE && !m.update_confirm);
     am_ui_input(&m,AM_CROSS);am_ui_input(&m,AM_LEFT);
@@ -141,6 +166,6 @@ int main(int argc,char **argv) {
     am_ui_render(buffer.pixels,&m);if (argc>1) dump(argv[1],"InstallerRelaunchError");
     m.update_progress=(AmUpdateProgress){AM_UPDATE_VERIFY,0xffffffffu,1};am_ui_render(buffer.pixels,&m);
     for (unsigned i=0;i<16;++i) assert(buffer.before[i]==0xDEADBEEF && buffer.after[i]==0xDEADBEEF);
-    puts("ui: menu/log pages, render bounds, save choices, Circle/clear confirmation and busy copy/verification views passed");
+    puts("ui: release note scroll, availability badge, automatic install guards, render bounds and confirmations passed");
     return 0;
 }

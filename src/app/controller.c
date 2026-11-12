@@ -10,6 +10,12 @@ static void back(AmUi *m) {
     } else if (m->editing) m->editing=0;
     else m->nav=VIEW_OVERVIEW;
 }
+int am_ui_auto_update_ready(const AmUi *m) {
+    return m->auto_update && !m->busy && !m->dirty && !m->editing &&
+        !m->reboot_pending && !m->copy_active && !m->speed_active &&
+        !m->clear_confirm && !m->update_confirm && !m->update_date_notice &&
+        m->nav<VIEW_REBOOT && am_update_installable(&m->update);
+}
 int am_ui_input(AmUi *m,unsigned keys) {
     if (m->busy) return ACTION_NONE;
     if (m->update_date_notice) {
@@ -36,6 +42,7 @@ int am_ui_input(AmUi *m,unsigned keys) {
         m->clear_confirm=1;m->clear_choice=1;m->message[0]=0;return ACTION_NONE;
     }
     if ((keys&AM_TRIANGLE) && m->nav==VIEW_TEST) return ACTION_SPEED_TEST;
+    if ((keys&AM_TRIANGLE) && m->nav==VIEW_UPDATES) return ACTION_TOGGLE_AUTO_UPDATE;
     if (keys&AM_SQUARE) return ACTION_EXPORT;
     if (m->editing && (m->nav==VIEW_REBOOT || m->nav==VIEW_EXIT)) {
         if (keys&(AM_UP|AM_DOWN)) { m->field^=1;return ACTION_NONE; }
@@ -61,15 +68,15 @@ int am_ui_input(AmUi *m,unsigned keys) {
         if ((keys&AM_RIGHT) && m->log_page+1<am_ui_log_pages(m->log)) ++m->log_page;
     }
     if (m->nav==VIEW_UPDATES) {
-        if ((keys&AM_LEFT) && m->update_page) --m->update_page;
-        if ((keys&AM_RIGHT) && m->update_page+1<am_ui_update_pages(m->update.notes)) ++m->update_page;
+        if (keys&AM_LEFT) am_ui_scroll_updates(m,-AM_UPDATE_NOTE_LINE);
+        else if (keys&AM_RIGHT) am_ui_scroll_updates(m,AM_UPDATE_NOTE_LINE);
     }
     if (!(keys&AM_CROSS)) return ACTION_NONE;
     switch (m->nav) {
         case VIEW_SETTINGS:case VIEW_REBOOT:case VIEW_EXIT:m->editing=1;m->field=0;break;
         case VIEW_TEST:return ACTION_TEST;
         case VIEW_UPDATES:
-            if (m->update.state==UPDATE_AVAILABLE && m->update.asset_url[0]) { m->update_confirm=1;m->update_choice=1;return ACTION_NONE; }
+            if (am_update_installable(&m->update)) { m->update_confirm=1;m->update_choice=1;return ACTION_NONE; }
             return ACTION_CHECK_UPDATES;
         case VIEW_LOG:return ACTION_LOG;
     }

@@ -63,7 +63,7 @@ The resume callback signals a worker; the worker waits for the owned USB device 
 
 Commit the matching source before creating the GitHub release tag. Publish a
 stable release with one VPK named `PSVSD_AM_<version>.vpk`, such as
-`PSVSD_AM_1.2.10.vpk`. The app reads the version and SHA-256 from GitHub's
+`PSVSD_AM_1.3.0.vpk`. The app reads the version and SHA-256 from GitHub's
 release API and downloads the VPK over HTTPS. The VPK includes all three
 kernel payloads.
 

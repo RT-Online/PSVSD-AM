@@ -1,9 +1,9 @@
 #ifndef ACCESSORY_PATHS_H
 #define ACCESSORY_PATHS_H
 #include <stdint.h>
-#define ACCESSORY_VERSION "1.2.10"
+#define ACCESSORY_VERSION "1.3.0"
 /* Monotonic Vita NN.NN revision, independent of semantic version digits. */
-#define ACCESSORY_PACKAGE_VERSION "01.30"
+#define ACCESSORY_PACKAGE_VERSION "01.32"
 #define ACCESSORY_DATA_DIR "ux0:data/PSVSD_AM"
 #define AM_LEGACY_DATA_DIR "ux0:data/PSVSD_Accessory"
 #define AM_LEGACY_KERNEL_DIR "ur0:data/PSVSD_Accessory"
@@ -18,6 +18,7 @@
 #define AM_ORIGINAL_EXPORT_NID 0x2A4C28E2u
 #define ACCESSORY_REQUEST_MAGIC 0x50535641u
 #define AM_SETTINGS_PATH ACCESSORY_KERNEL_DIR "/settings.ini"
+#define AM_AUTO_UPDATE_PATH ACCESSORY_KERNEL_DIR "/auto-update"
 #define AM_APP_LOG ACCESSORY_KERNEL_DIR "/app.log"
 #define AM_BOOT_PLUGIN "ur0:tai/psvsd_am.skprx"
 #define AM_BOOT_SOURCE "app0:psvsd_am.skprx"
