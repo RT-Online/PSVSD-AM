@@ -6,6 +6,7 @@
 static struct {
     int installed,running,natural_exit,removal_delay,permanent_removal;
     int stat_error,ready,ready_error,lookup_error,stop_error,stop_ignored,delete_error;
+    int close_other_error,close_other_calls;
     int lookups,stops,deletes,delays,cancels;
 } test;
 static void reset(void) {
@@ -38,6 +39,12 @@ int sceAppMgrDestroyAppByName(const char *title) {
     if (!test.stop_error && !test.stop_ignored) test.running=0;
     return test.stop_error;
 }
+int sceAppMgrDestroyOtherApp(void) {
+    assert(!test.stops && !test.deletes && !test.ready);
+    ++test.close_other_calls;
+    if (!test.close_other_error) test.running=0;
+    return test.close_other_error;
+}
 int am_package_remove_helper(void) {
     assert(!test.running || test.lookup_error);
     ++test.deletes;return test.delete_error;
@@ -49,7 +56,7 @@ int main(void) {
     assert(am_update_cleanup_installer()==0 && !test.lookups && !test.deletes);
     reset();test.stat_error=-5;
     assert(am_update_cleanup_installer()==-5 && !test.lookups && !test.deletes);
-    reset();assert(am_update_cleanup_installer()==0 && !test.stops && test.deletes==1 && test.cancels==1);
+    reset();assert(am_update_cleanup_installer()==0 && !test.stops && !test.close_other_calls && test.deletes==1 && test.cancels==1);
     assert(am_update_cleanup_installer()==0 && test.deletes==1);
     reset();test.running=1;test.natural_exit=3;test.removal_delay=2;
     assert(am_update_cleanup_installer()==0 && !test.stops && test.deletes==1 && test.delays==4);
@@ -67,23 +74,21 @@ int main(void) {
     assert(am_update_cleanup_installer()==(int)SCE_APPMGR_ERROR_BUSY && test.deletes==1 && !test.cancels);
 
     reset();test.installed=0;
-    assert(am_update_cleanup_installer_on_return()==0 && !test.lookups && !test.deletes);
+    assert(am_update_cleanup_installer_on_return()==0 && !test.close_other_calls && !test.deletes);
     reset();test.ready=1;
-    assert(am_update_cleanup_installer_on_return()==AM_INSTALLER_CLEANUP_DEFERRED && !test.lookups && !test.stops && !test.deletes);
+    assert(am_update_cleanup_installer_on_return()==AM_INSTALLER_CLEANUP_DEFERRED && !test.close_other_calls && !test.deletes);
     reset();test.ready_error=-9;
-    assert(am_update_cleanup_installer_on_return()==-9 && !test.lookups && !test.stops && !test.deletes);
-    reset();test.running=1;test.stop_ignored=1;
-    assert(am_update_cleanup_installer_on_return()==(int)SCE_APPMGR_ERROR_BUSY && test.stops==1 && !test.deletes);
-    reset();test.running=1;test.natural_exit=3;test.removal_delay=1;
+    assert(am_update_cleanup_installer_on_return()==-9 && !test.close_other_calls && !test.deletes);
+    reset();test.running=1;test.removal_delay=1;
     assert(am_update_cleanup_installer_on_return()==AM_INSTALLER_REMOVED);
-    assert(test.stops==1 && test.deletes==1 && test.delays==3 && !test.cancels);
+    assert(test.close_other_calls==1 && !test.stops && !test.lookups && test.deletes==1 && test.delays==1 && !test.cancels);
     assert(am_update_cleanup_installer_on_return()==0 && test.deletes==1);
-    reset();test.stop_error=(int)AM_APPMGR_NOT_RUNNING;
-    assert(am_update_cleanup_installer_on_return()==AM_INSTALLER_REMOVED && test.stops==1 && test.deletes==1);
-    reset();test.stop_error=-6;
-    assert(am_update_cleanup_installer_on_return()==-6 && test.stops==1 && !test.deletes);
+    reset();test.close_other_error=(int)AM_APPMGR_NOT_RUNNING;
+    assert(am_update_cleanup_installer_on_return()==AM_INSTALLER_REMOVED && test.close_other_calls==1 && test.deletes==1);
+    reset();test.running=1;test.close_other_error=-6;
+    assert(am_update_cleanup_installer_on_return()==-6 && test.close_other_calls==1 && !test.deletes);
     reset();test.delete_error=-7;
-    assert(am_update_cleanup_installer_on_return()==-7 && test.stops==1 && test.deletes==1 && !test.cancels);
-    puts("Installer cleanup: staged update guard, targeted close, confirmed removal and failures passed");
+    assert(am_update_cleanup_installer_on_return()==-7 && test.close_other_calls==1 && test.deletes==1 && !test.cancels);
+    puts("Installer cleanup: targeted close on exit, app-context release on update return, staged update guard and failures passed");
     return 0;
 }

@@ -1,11 +1,11 @@
 # PSVSD/AM Vita tests
 
-## 1.2.8 to 1.2.9 and immediate reboot
+## 1.2.9 to 1.2.10 and immediate reboot
 
-1. Start in PSVSD/AM **1.2.8** with Wi-Fi connected and an accurate Vita date and time.
-2. With **1.2.9** available as the latest stable GitHub release, open **Updates**, choose **Update to 1.2.9**, and confirm **Install Update** once.
-3. Watch the installation and return. Check that the updated app opens automatically and stays on its own screen.
-4. Check that the reopened app reports **1.2.9**. Keep the existing mount and immediately choose **Reboot → Save and Reboot**.
+1. Start in PSVSD/AM **1.2.9** with Wi-Fi connected and an accurate Vita date and time.
+2. With **1.2.10** available as the latest stable GitHub release and its VPK attached, open **Updates**, choose **Update to 1.2.10**, and confirm **Install Update** once.
+3. Watch the entire update. Check that the progress screen carries into the return and that the Vita stays in the app after **Opening PSVSD/AM**.
+4. Check that the reopened app reports **1.2.10**. Keep the existing mount and immediately choose **Reboot → Save and Reboot**.
 5. Verify that the Vita cold boots from that selection. Check the Home screen for the **PSVSD/AM Installer** bubble before opening PSVSD/AM again.
 6. Open PSVSD/AM and check the saved mount. Export `ux0:data/PSVSD_AM/test.log` from **Log** with Square. Check for **Removed temporary installer before first app frame** and the cold reset request. If the installer bubble remains or the app goes to Home during the update, capture the log and note when it happened.
 
@@ -15,7 +15,7 @@ to check their actions.
 
 ## Clock notice
 
-1. Install 1.2.9 and connect to Wi-Fi. Set the Vita to an old date, such as January 1, 2012.
+1. Install 1.2.10 and connect to Wi-Fi. Set the Vita to an old date, such as January 1, 2012.
 2. Launch PSVSD/AM. Verify that the **Check the Vita's date and time** notice appears. Dismiss it with **OK**, Cross or Circle. Open **Updates** and manually check to verify the notice appears again.
 3. Go to **Settings → Date & Time → Date & Time Settings**. Choose **Set via Internet → Set Now** or **Set Manually**. Return to the app and select **Check for Updates**. You should be able to retry immediately.
 4. With a newer release available, check for it with the correct clock. Change the date to an old date and return to the app. Confirm **Install Update**. The download should stop and show the same notice. Correct the date and try the update again.

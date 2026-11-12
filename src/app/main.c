@@ -368,12 +368,19 @@ static void install_update(void) {
         snprintf(model.message,sizeof(model.message),"Could not start installer: %08X",(unsigned)ret);
     }
 }
-static int init_display(void) {
+static int init_display(int returning_from_update) {
     SceUID block=sceKernelAllocMemBlock("PSVSDAMDisplay",SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW,4*1024*1024,NULL);
     if (block<0) return block;
     int ret=sceKernelGetMemBlockBase(block,(void **)&framebuffers[0]);if (ret<0) return ret;
     framebuffers[1]=framebuffers[0]+(2*1024*1024/sizeof(uint32_t));
-    memset(framebuffers[0],0,4*1024*1024);
+    if (returning_from_update) {
+        model.nav=VIEW_UPDATES;
+        model.busy=1;
+        model.update.state=UPDATE_INSTALLING;
+        model.update_progress.phase=AM_UPDATE_REOPEN;
+    }
+    am_ui_render(framebuffers[0],&model);
+    if (returning_from_update) memset(&model,0,sizeof(model));
     SceDisplayFrameBuf f={sizeof(f),framebuffers[0],960,SCE_DISPLAY_PIXELFORMAT_A8B8G8R8,960,544};
     return sceDisplaySetFrameBuf(&f,SCE_DISPLAY_SETBUF_NEXTFRAME);
 }
@@ -386,8 +393,7 @@ int main(void) {
     if (cleanup==AM_INSTALLER_REMOVED) am_log("Removed temporary installer before first app frame.\n");
     else if (cleanup==AM_INSTALLER_CLEANUP_DEFERRED) am_log("Temporary installer cleanup deferred.\n");
     else if (cleanup<0) am_log("Temporary installer cleanup on return failed: %08X\n",(unsigned)cleanup);
-    if (init_display()<0) return 1;
-    draw();
+    if (init_display(resumed>0)<0) return 1;
     int loaded=am_load_settings(&model.saved);model.pending=model.saved;
     if (loaded<0) snprintf(model.message,sizeof(model.message),"Settings unreadable; automatic mounting defaults off.");
     am_log("Data path migration: %08X\n",(unsigned)migrated);

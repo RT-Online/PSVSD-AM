@@ -39,16 +39,15 @@ static int cleanup_installer(int returning_from_update) {
         int ready=sceIoGetstat(AM_UPDATE_ROOT "/ready",&info);
         if (ready>=0) return AM_INSTALLER_CLEANUP_DEFERRED;
         if ((unsigned)ready!=FILE_NOT_FOUND) return ready;
-    }
-    /* Let the helper finish the accepted handoff before closing its title. */
-    int running=wait_for_helper_exit();
-    if (returning_from_update || running!=0) {
-        /* Ask AppMgr to close only the installer before updating LiveArea,
-         * even if the process has already exited during this handoff. */
+        /* AutoPlugin2 releases the previous app context before deleting
+         * its installer. Do this only during a return from our installer. */
+        int stopped=sceAppMgrDestroyOtherApp();
+        if (stopped<0 && (unsigned)stopped!=AM_APPMGR_NOT_RUNNING) return stopped;
+    } else if (wait_for_helper_exit()!=0) {
         int stopped=sceAppMgrDestroyAppByName(HELPER_TITLE);
         if (stopped<0 && (unsigned)stopped!=AM_APPMGR_NOT_RUNNING) return stopped;
         if (stopped>=0) {
-            running=wait_for_helper_exit();
+            int running=wait_for_helper_exit();
             if (running!=0) return running<0?running:(int)SCE_APPMGR_ERROR_BUSY;
         }
     }

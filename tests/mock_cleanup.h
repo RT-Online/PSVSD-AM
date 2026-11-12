@@ -6,5 +6,6 @@ typedef struct { unsigned mode; } SceIoStat;
 int sceIoGetstat(const char *,SceIoStat *);
 int sceAppMgrGetIdByName(SceUID *,const char *);
 int sceAppMgrDestroyAppByName(const char *);
+int sceAppMgrDestroyOtherApp(void);
 int sceKernelDelayThread(unsigned);
 #endif

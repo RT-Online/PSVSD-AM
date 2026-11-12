@@ -4,9 +4,9 @@
 
 AI tools assisted with code development, documentation, and testing. RefurbedTech directed development and performed hardware testing.
 
-Version **1.2.9** · Vita title ID **RTPSV0001** · Package version **01.29**
+Version **1.2.10** · Vita title ID **RTPSV0001** · Package version **01.30**
 
-The launcher displays the `1.2` series. The app and update metadata show `1.2.9`.
+The launcher displays the `1.2` series. The app and update metadata show `1.2.10`.
 See [the Vita test guide](docs/UPDATE_TEST.md) for update, reboot and speed checks.
 
 ## Features
@@ -131,7 +131,7 @@ monotonically increasing NN.NN package revision. Both app and helper carry
 AM_VERSION so installation validates the exact release tag and matching package.
 
 The installed version controls the launch of the temporary installer. The helper
-from the downloaded VPK controls the return. An in-app upgrade from 1.2.8
+from the downloaded VPK controls the return. An in-app upgrade from 1.2.9
 exercises the new return sequence.
 
 ### Switching storage in either direction
@@ -175,20 +175,21 @@ validation. The app verifies the VPK against GitHub's release-asset SHA-256.
 
 ### Installer handoff
 
-The handoff uses paired play-URI requests. The installer tries a direct return
-to PSVSD/AM and retries with the previous launch flags if both direct requests
-fail. A successful request lets the installer exit. The launch flags and
-results go into the log. A boot-relative timestamp identifies a recent return
-from the installer and enables one cleanup attempt before the first frame.
+The handoff uses the paired play-URI requests from AutoPlugin2 2.20. The
+installer exits immediately when the Vita accepts the launch. If both requests
+fail, the installer logs both results and offers a retry. A boot-relative
+timestamp identifies the return from the installer. The updated app draws the
+same **Opening PSVSD/AM** screen as its first frame during that return.
 
 ### Save and Reboot after an update
 
 When you keep the current storage mount, Save and Reboot commits settings,
 prepares the artwork cache through file I/O, and requests a cold reset.
-On return from an update, PSVSD/AM closes the installer title and removes its
-bubble before displaying the app. A staged update awaiting installation keeps
-its installer. Exit and app-folder copying can remove a leftover installer.
-Full LiveArea artwork refresh runs on Exit.
+On return from an update, PSVSD/AM uses the Vita's app manager to close the
+previous app context before removing the temporary installer bubble. A staged
+update awaiting installation keeps its installer. Exit and app-folder copying
+can remove a leftover installer by title. Full LiveArea artwork refresh runs on
+Exit.
 
 ### Artwork and data folders
 

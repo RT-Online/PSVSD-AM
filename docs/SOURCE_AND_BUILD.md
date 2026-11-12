@@ -63,7 +63,7 @@ The resume callback signals a worker; the worker waits for the owned USB device 
 
 Commit the matching source before creating the GitHub release tag. Publish a
 stable release with one VPK named `PSVSD_AM_<version>.vpk`, such as
-`PSVSD_AM_1.2.9.vpk`. The app reads the version and SHA-256 from GitHub's
+`PSVSD_AM_1.2.10.vpk`. The app reads the version and SHA-256 from GitHub's
 release API and downloads the VPK over HTTPS. The VPK includes all three
 kernel payloads.
 
@@ -81,9 +81,10 @@ The settings schema and LiveArea XML format versions are independent.
 
 ## Installer cleanup
 
-On return from the installer, startup closes the installer title and removes
-its LiveArea bubble before drawing the first app frame, provided no staged
-install is waiting. Exit and Save and Exit can remove a leftover installer
-when leaving the app. A change that copies apps between mounts removes the
-helper before copying. The embedded installer is used for future updates.
-See [the Vita test guide](UPDATE_TEST.md).
+On return from the installer, startup calls `sceAppMgrDestroyOtherApp` before
+removing the installer bubble and drawing the first app frame. This cleanup
+requires a recent installer return and runs once when there is no staged
+installation waiting. Exit and Save and Exit can remove a leftover installer
+by title. A change that copies apps between mounts removes the helper before
+copying. The embedded installer is used for future updates. See
+[the Vita test guide](UPDATE_TEST.md).

@@ -123,10 +123,9 @@ int main(void) {
             if (!pressed || held) { held=pressed;continue; }
         }
         show(AM_UPDATE_REOPEN,tick++);
+        handoff_log("Request return to PSVSD/AM",0);
         int launch=am_update_relaunch_start();
-        handoff_log("Submit main-app launch",launch);
         if (launch>=0) {
-            handoff_log("Helper exiting after accepted launch",0);
             sceKernelExitProcess(result<0?1:0);return 0;
         }
         install_result=launch;wait=held=1;
