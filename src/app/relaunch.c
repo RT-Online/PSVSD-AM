@@ -47,7 +47,7 @@ int am_update_relaunch_confirm(void) {
     int64_t now=sceKernelGetSystemTimeWide();
     if (now<0 || (uint64_t)now<started || (uint64_t)now-started>AM_RELAUNCH_WAIT_US) return -1;
 
-    file=fopen(AM_UPDATE_ROOT "/handoff.log","a");
+    file=fopen(AM_UPDATE_HANDOFF_LOG,"a");
     if (file) {
         fprintf(file,"Startup receipt: elapsed_us=%llu version=" ACCESSORY_VERSION "\n",
             (unsigned long long)((uint64_t)now-started));

@@ -67,7 +67,7 @@ static int create_file(const char *path,const void *bytes,size_t size,int exclus
     int ret=write_all(fd,bytes,size),closed=sceIoClose(fd);
     return ret<0?ret:closed;
 }
-int am_replace_file(const char *path,const void *bytes,size_t size) {
+static int am_replace_file(const char *path,const void *bytes,size_t size) {
     char temp[192],swap[192],backup[192];
     if (snprintf(temp,sizeof(temp),"%s.psvsdam.new",path)>=(int)sizeof(temp) ||
         snprintf(swap,sizeof(swap),"%s.psvsdam.swap",path)>=(int)sizeof(swap) ||
@@ -122,7 +122,7 @@ static int append_text(char *out,size_t cap,size_t *used,const char *p,size_t n)
     memcpy(out+*used,p,n);*used+=n;out[*used]=0;return 0;
 }
 static int line_equal(const char *p,size_t n,const char *q) { return n==strlen(q) && !memcmp(p,q,n); }
-int am_tai_transform(const char *input,int enabled,char *out,size_t cap) {
+static int am_tai_transform(const char *input,int enabled,char *out,size_t cap) {
     if (!cap) return -1;
     size_t used=0;int inside=0,found=0,inserted=0;out[0]=0;
     for (const char *p=input;*p;) {
@@ -319,7 +319,7 @@ static int prepared_apps(void) {
     for (unsigned i=0;i<4;++i) {
         char source[128],target[128];
         snprintf(source,sizeof(source),"app0:%s",files[i]);
-        snprintf(target,sizeof(target),"uma0:app/RTPSV0001/%s",files[i]);
+        snprintf(target,sizeof(target),"uma0:app/" AM_APP_TITLE_ID "/%s",files[i]);
         if (!same_file(source,target)) { am_log("Destination app check: missing or mismatched %s\n",target);return 0; }
     }
     return 1;

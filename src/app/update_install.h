@@ -3,10 +3,6 @@
 #define AM_UPDATE_INSTALL_H
 #include "updates.h"
 #include "../common/paths.h"
-#define AM_UPDATE_ROOT ACCESSORY_DATA_DIR "/update"
-#define AM_UPDATE_VPK AM_UPDATE_ROOT "/release.vpk"
-#define AM_UPDATE_STAGE AM_UPDATE_ROOT "/package"
-#define AM_UPDATE_HELPER AM_UPDATE_ROOT "/helper"
 #define AM_APPMGR_NOT_RUNNING 0x80802012u
 int am_update_prepare(const char *version,char *reason,unsigned cap,AmUpdateProgressCallback progress,void *context);
 int am_update_launch_installer(void);

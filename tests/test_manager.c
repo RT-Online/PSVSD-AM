@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include "test_temp.h"
 #include "../src/app/manager.c"
 #include "../src/app/prepare.c"
 
@@ -42,7 +43,11 @@ static struct {
     unsigned char speed_pages[SPEED_FILE_BYTES/SPEED_RANDOM_BLOCK];
 } cfg;
 static int err(void) { return (int)(0x80010000u|(unsigned)errno); }
-static char *mapped(const char *p,char out[512]) { snprintf(out,512,"%s/%s",root,p);return out; }
+static char *mapped(const char *p,char out[512]) {
+    int length=snprintf(out,512,"%s/%s",root,p);
+    assert(length>0 && length<512);
+    return out;
+}
 static void fixture(const char *path,const void *bytes,size_t n) {
     char p[512];FILE *f=fopen(mapped(path,p),"wb");assert(f);assert(fwrite(bytes,1,n,f)==n);fclose(f);
 }
@@ -154,7 +159,7 @@ int _vshKernelSearchModuleByName(const char *name,const void *work) {
 static void reset(void) {
     for (unsigned i=0;i<2048;++i) assert(!dir_handles[i]);
     am_expect_query(0x1234);memset(&cfg,0,sizeof(cfg));cfg.module=cfg.raw=1;progress_calls=0;
-    char template[]="/tmp/psvsdam-manager-XXXXXX";char *p=mkdtemp(template);assert(p);snprintf(root,sizeof(root),"%s",p);
+    test_temp_dir(root,sizeof(root),"manager");
     const char *dirs[]={"ur0:data",ACCESSORY_KERNEL_DIR,"ur0:tai","ux0:","uma0:","ux0:data","uma0:data","app0:"};
     for (unsigned i=0;i<sizeof(dirs)/sizeof(dirs[0]);++i) { char path[512];assert(!mkdir(mapped(dirs[i],path),0700)); }
     put(AM_TAI_CONFIG,"# Original\n*KERNEL\nur0:tai/nonpdrm.skprx\n*ALL\nur0:tai/custom.suprx\n");

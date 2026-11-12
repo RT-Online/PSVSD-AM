@@ -2,7 +2,6 @@
  * GPL-3.0-or-later. */
 #include "update_install.h"
 #include "migration.h"
-#include "../common/paths.h"
 #include "ui.h"
 #ifdef PSVSD_AM_HOST_TEST
 #include "mock_installer.h"
@@ -25,7 +24,7 @@ static unsigned install_done,install_phase;
 static const char *failure_title="Installation failed";
 static char failure[192];
 static void handoff_log(const char *stage,int result) {
-    FILE *f=fopen(AM_UPDATE_ROOT "/handoff.log","a");
+    FILE *f=fopen(AM_UPDATE_HANDOFF_LOG,"a");
     if (f) { fprintf(f,"%s: %08X\n",stage,(unsigned)result);fclose(f); }
 }
 static int init_display(void) {
@@ -79,7 +78,7 @@ static void show(unsigned phase,unsigned tick) {
 }
 static int install_worker(SceSize argc,void *args) {
     (void)argc;(void)args;
-    char expected[7]={0};FILE *f=fopen(AM_UPDATE_ROOT "/ready","rb");int ready=0;
+    char expected[7]={0};FILE *f=fopen(AM_UPDATE_READY,"rb");int ready=0;
     if (f) { ready=fread(expected,1,7,f)==6;fclose(f); }
     char package[6];
     if (ready && !strcmp(expected,ACCESSORY_PACKAGE_VERSION) &&
@@ -96,7 +95,7 @@ int main(void) {
     unsigned tick=0;show(AM_UPDATE_PREPARE,tick++);
     handoff_log("Installer " ACCESSORY_VERSION " started",0);
     handoff_log("Update path migration",migrated);
-    int closed=sceAppMgrDestroyAppByName("RTPSV0001");
+    int closed=sceAppMgrDestroyAppByName(AM_APP_TITLE_ID);
     handoff_log("Close previous PSVSD/AM",closed);
     int worker=migrated;
     if (worker>=0 && closed<0 && (unsigned)closed!=AM_APPMGR_NOT_RUNNING) worker=closed;
@@ -109,9 +108,9 @@ int main(void) {
     }
     if (worker>=0) { if (start>=0) sceKernelWaitThreadEnd(worker,NULL,NULL);sceKernelDeleteThread(worker); }
     int result=install_result;FILE *f;
-    handoff_log("Install result",result);remove(AM_UPDATE_ROOT "/ready");
+    handoff_log("Install result",result);remove(AM_UPDATE_READY);
     if (migrated>=0) remove(AM_UPDATE_VPK); /* Also covers older callers. */
-    f=fopen(AM_UPDATE_ROOT "/result","wb");if (f) { fprintf(f,"%08X",(unsigned)result);fclose(f); }
+    f=fopen(AM_UPDATE_RESULT,"wb");if (f) { fprintf(f,"%08X",(unsigned)result);fclose(f); }
     if (result>=0) for (unsigned i=0;i<15;++i) show(AM_UPDATE_COMPLETE,tick++);
     if (result<0) snprintf(failure,sizeof(failure),"Installation did not complete.\nPress X to return to PSVSD/AM. Details are in Log.");
     int wait=result<0,held=1;

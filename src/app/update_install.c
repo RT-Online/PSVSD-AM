@@ -86,8 +86,10 @@ done:
     unzClose(zip);return ret;
 }
 int am_update_prepare(const char *version,char *reason,unsigned cap,AmUpdateProgressCallback progress,void *context) {
-    remove(AM_UPDATE_ROOT "/ready");
+    int discard_staging=0;
+    remove(AM_UPDATE_READY);
     if (clean(AM_UPDATE_STAGE,0)<0 || clean(AM_UPDATE_HELPER,0)<0) goto bad;
+    discard_staging=1;
     sceIoMkdir(AM_UPDATE_ROOT,0777);sceIoMkdir(AM_UPDATE_STAGE,0777);
     const char *v=version;if (*v=='v') { ++v;if (*v=='.') ++v; }
     char expected[6];
@@ -99,10 +101,21 @@ int am_update_prepare(const char *version,char *reason,unsigned cap,AmUpdateProg
         copy(AM_UPDATE_STAGE "/installer/head.bin",AM_UPDATE_HELPER "/sce_sys/package/head.bin")<0 ||
         copy(AM_UPDATE_STAGE "/sce_sys/icon0.png",AM_UPDATE_HELPER "/sce_sys/icon0.png")<0) goto bad;
     if (am_package_helper_release(AM_UPDATE_HELPER,v,expected)<0) goto bad;
-    FILE *f=fopen(AM_UPDATE_ROOT "/ready","wb");if (!f) goto bad;
-    int ok=fwrite(expected,1,6,f)==6;if (fclose(f)) ok=0;if (!ok) goto bad;
+    FILE *f=fopen(AM_UPDATE_READY,"wb");
+    if (!f) goto bad;
+    int ok=fwrite(expected,1,6,f)==6;
+    if (fclose(f)) ok=0;
+    if (!ok) goto bad;
+    /* Preserve staging for recovery after a system promotion attempt. */
+    discard_staging=0;
     if (am_package_promote(AM_UPDATE_HELPER)<0) goto bad;
     return 0;
 bad:
-    remove(AM_UPDATE_ROOT "/ready");snprintf(reason,cap,"Package validation or installer preparation failed. Existing app retained.");return -1;
+    remove(AM_UPDATE_READY);
+    if (discard_staging) {
+        clean(AM_UPDATE_STAGE,0);
+        clean(AM_UPDATE_HELPER,0);
+    }
+    snprintf(reason,cap,"Package validation or installer preparation failed. Existing app retained.");
+    return -1;
 }

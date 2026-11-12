@@ -3,6 +3,9 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
+#define AM_CONTENT_ID(title_id) "HB0001-" title_id "_00-0000000000000000"
+
 static unsigned u16(const unsigned char *p) { return p[0]|p[1]<<8; }
 static uint32_t u32(const unsigned char *p) { return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24; }
 static int validate(const char *path,const char *expected,const char *title,const char *content,const char *semantic,char *package) {
@@ -35,8 +38,8 @@ static int validate(const char *path,const char *expected,const char *title,cons
 }
 
 int am_package_release(const char *path,const char *semantic,char package[6]) {
-    return validate(path,NULL,"RTPSV0001","HB0001-RTPSV0001_00-0000000000000000",semantic,package);
+    return validate(path,NULL,AM_APP_TITLE_ID,AM_CONTENT_ID(AM_APP_TITLE_ID),semantic,package);
 }
 int am_package_helper_release(const char *path,const char *semantic,const char *package) {
-    return validate(path,package,"RTPSVUPD1","HB0001-RTPSVUPD1_00-0000000000000000",semantic,NULL);
+    return validate(path,package,AM_INSTALLER_TITLE_ID,AM_CONTENT_ID(AM_INSTALLER_TITLE_ID),semantic,NULL);
 }

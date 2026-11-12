@@ -98,9 +98,9 @@ static int ready_for_this_helper(const char *path) {
     return ok && (n==5 || (n==6 && !text[5])) && !memcmp(text,ACCESSORY_PACKAGE_VERSION,5)?1:-1;
 }
 int am_migrate_update(void) {
-    const char *old=AM_LEGACY_DATA_DIR "/update",*current=ACCESSORY_DATA_DIR "/update";
+    const char *old=AM_LEGACY_DATA_DIR "/update",*current=AM_UPDATE_ROOT;
     const char *backup=ACCESSORY_DATA_DIR "/update.pre-migration";
-    int active=ready_for_this_helper(ACCESSORY_DATA_DIR "/update/ready");if (active==1) return 0;
+    int active=ready_for_this_helper(AM_UPDATE_READY);if (active==1) return 0;
     int legacy=ready_for_this_helper(AM_LEGACY_DATA_DIR "/update/ready");
     if (legacy<=0) return legacy<0 || active<0?-1:0;
     if (mkdir_ok(ACCESSORY_DATA_DIR)<0) return -1;

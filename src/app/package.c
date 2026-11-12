@@ -26,4 +26,4 @@ done:
     return ret;
 }
 int am_package_promote(const char *path) { return package_operation(path,0); }
-int am_package_remove_helper(void) { return package_operation("RTPSVUPD1",1); }
+int am_package_remove_helper(void) { return package_operation(AM_INSTALLER_TITLE_ID,1); }

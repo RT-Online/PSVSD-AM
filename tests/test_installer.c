@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "test_temp.h"
 #define main installer_entry
 #include "../src/app/installer_main.c"
 #undef main
@@ -59,7 +60,7 @@ static void reset(void) {
     assert(fwrite(ACCESSORY_PACKAGE_VERSION,1,sizeof(ACCESSORY_PACKAGE_VERSION),f)==sizeof(ACCESSORY_PACKAGE_VERSION));fclose(f);
 }
 int main(void) {
-    char root[]="/tmp/am-installer-XXXXXX";assert(mkdtemp(root));assert(chdir(root)==0);
+    char root[512];test_temp_dir(root,sizeof(root),"installer");assert(chdir(root)==0);
     assert(mkdir("ux0:data",0700)==0);assert(mkdir("ux0:data/PSVSD_AM",0700)==0);assert(mkdir(AM_UPDATE_ROOT,0700)==0);
     reset();assert(init_display()==0);for (unsigned i=0;i<120;++i) show(AM_UPDATE_SYSTEM_INSTALL,i);
     assert(frames==120 && now==240*16667u); /* Real renderer never touches scanout. */

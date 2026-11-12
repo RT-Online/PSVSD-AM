@@ -14,7 +14,7 @@ int am_touch_point(const AmTouchBounds *b,int rx,int ry,int *x,int *y) {
     *y=(int)((int64_t)(ry-b->min_y)*543/(b->max_y-b->min_y));
     return 1;
 }
-int am_ui_tap(AmUi *m,int x,int y) {
+static int am_ui_tap(AmUi *m,int x,int y) {
     if (m->busy) return ACTION_NONE;
     if (m->update_date_notice) {
         if (inside(x,y,AM_DATE_OK_X,AM_CONFIRM_Y,AM_DATE_OK_W,AM_CONFIRM_H))

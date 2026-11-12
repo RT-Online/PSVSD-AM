@@ -27,7 +27,7 @@ typedef struct {
     AmCopyCallback progress;
     void *ctx;
 } Copy;
-static const char *const copy_apps[]={"RTPSV0001","VITASHELL"};
+static const char *const copy_apps[]={AM_APP_TITLE_ID,"VITASHELL"};
 static int copy_fail(Copy *c,const char *path,int ret) {
     snprintf(c->failure,sizeof(c->failure),"%s",path);return ret<0?ret:COPY_ERROR;
 }
@@ -290,8 +290,9 @@ static int prepare_apps(int restoring,AmCopyCallback progress,void *ctx,char *me
     message[0]=0;
     if (!storage_ready(restoring)) { snprintf(message,cap,"Destination must be verified at uma0 before copying.");return COPY_ERROR; }
     SceIoStat helper_info;
-    int helper=sceIoGetstat("uma0:app/RTPSVUPD1",&helper_info);
-    if (helper>=0) helper=SCE_S_ISDIR(helper_info.st_mode)?remove_tree("uma0:app/RTPSVUPD1",0):COPY_ERROR;
+    const char *helper_path="uma0:app/" AM_INSTALLER_TITLE_ID;
+    int helper=sceIoGetstat(helper_path,&helper_info);
+    if (helper>=0) helper=SCE_S_ISDIR(helper_info.st_mode)?remove_tree(helper_path,0):COPY_ERROR;
     else if (helper==COPY_ENOENT) helper=0;
     if (helper<0) { snprintf(message,cap,"Cannot remove temporary installer from destination. See Log.");am_log("Destination installer cleanup failed: %08X\n",(unsigned)helper);return helper; }
     Copy *c=calloc(1,sizeof(*c));if (!c) return COPY_ERROR;
@@ -300,8 +301,8 @@ static int prepare_apps(int restoring,AmCopyCallback progress,void *ctx,char *me
     int ret=0;
     if (!c->first || !c->second) { ret=COPY_ERROR;goto done; }
     am_log("Preparing app folders: ux0:app to verified uma0:app; complete folders replaced; destination-only files removed.\n");
-    if ((ret=scan(c,"RTPSV0001",0))<0 || (ret=scan(c,"VITASHELL",0))<0) goto done;
-    const char *required[]={"RTPSV0001/eboot.bin","VITASHELL/eboot.bin"};
+    if ((ret=scan(c,AM_APP_TITLE_ID,0))<0 || (ret=scan(c,"VITASHELL",0))<0) goto done;
+    const char *required[]={AM_APP_TITLE_ID "/eboot.bin","VITASHELL/eboot.bin"};
     for (unsigned n=0;n<2;++n) {
         int found=0;for (size_t i=0;i<c->count;++i) if (!c->items[i].dir && !strcmp(c->items[i].path,required[n])) found=1;
         if (!found) { ret=copy_fail(c,required[n],COPY_ENOENT);goto done; }

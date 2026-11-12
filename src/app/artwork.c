@@ -11,7 +11,7 @@
 #include <psp2/livearea.h>
 #include <psp2/sysmodule.h>
 #endif
-#define CACHE "ur0:appmeta/RTPSV0001"
+#define CACHE "ur0:appmeta/" AM_APP_TITLE_ID
 #define PENDING ACCESSORY_KERNEL_DIR "/artwork-pending"
 #define VERSION ACCESSORY_KERNEL_DIR "/artwork-version"
 static const char *files[]={"icon0.png","livearea/contents/template.xml",
@@ -98,7 +98,7 @@ static int refresh(int notify_livearea) {
         int owned=sceSysmoduleIsLoaded(SCE_SYSMODULE_LIVEAREA)!=0;
         int ret=owned?sceSysmoduleLoadModule(SCE_SYSMODULE_LIVEAREA):0;
         if (ret<0) return ret;
-        ret=sceLiveAreaReplaceAllForTitleSync("app0:sce_sys/livearea/contents","RTPSV0001",NULL);
+        ret=sceLiveAreaReplaceAllForTitleSync("app0:sce_sys/livearea/contents",AM_APP_TITLE_ID,NULL);
         if (owned) sceSysmoduleUnloadModule(SCE_SYSMODULE_LIVEAREA);
         if (ret<0) return ret;
     }

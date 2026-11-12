@@ -6,14 +6,24 @@ if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     message(FATAL_ERROR "Set VITASDK to your VitaSDK installation")
   endif()
 endif()
-file(READ "${CMAKE_CURRENT_SOURCE_DIR}/common/paths.h" am_versions)
-string(REGEX MATCH "ACCESSORY_VERSION \"([^\"]+)\"" unused "${am_versions}")
+set(am_paths "${CMAKE_CURRENT_SOURCE_DIR}/common/paths.h")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${am_paths}")
+file(READ "${am_paths}" am_definitions)
+string(REGEX MATCH "ACCESSORY_VERSION \"([^\"]+)\"" unused "${am_definitions}")
 set(AM_VERSION "${CMAKE_MATCH_1}")
-string(REGEX MATCH "ACCESSORY_PACKAGE_VERSION \"([0-9][0-9][.][0-9][0-9])\"" unused "${am_versions}")
+string(REGEX MATCH "ACCESSORY_PACKAGE_VERSION \"([0-9][0-9][.][0-9][0-9])\"" unused "${am_definitions}")
 set(AM_PACKAGE_VERSION "${CMAKE_MATCH_1}")
 if(NOT AM_VERSION OR NOT AM_PACKAGE_VERSION)
   message(FATAL_ERROR "Invalid release/package version in common/paths.h")
 endif()
+foreach(title_id IN ITEMS AM_APP_TITLE_ID AM_INSTALLER_TITLE_ID)
+  string(REGEX MATCH "#define ${title_id} \"([A-Z0-9]+)\"" definition "${am_definitions}")
+  string(LENGTH "${CMAKE_MATCH_1}" title_length)
+  if(NOT definition OR NOT title_length EQUAL 9)
+    message(FATAL_ERROR "Invalid ${title_id} in common/paths.h")
+  endif()
+  set(${title_id} "${CMAKE_MATCH_1}")
+endforeach()
 string(SUBSTRING "${AM_PACKAGE_VERSION}" 0 2 AM_MODULE_MAJOR)
 string(SUBSTRING "${AM_PACKAGE_VERSION}" 3 2 AM_MODULE_MINOR)
 string(REGEX REPLACE "^0" "" AM_MODULE_MAJOR "${AM_MODULE_MAJOR}")
@@ -57,7 +67,14 @@ foreach(mode IN ITEMS psvsd_am usbmc_accessory_probe psvsd_am_status)
   clean_vita_self(${mode}.skprx ${mode} CONFIG ${exports} UNSAFE)
 endforeach()
 
-add_executable(psvsd_am_app app/main.c app/session.c app/manager.c app/prepare.c app/ui.c app/controller.c app/touch.c app/updates.c app/update_network.c app/update_install.c app/launch.c app/installer_cleanup.c app/relaunch.c app/migration.c app/artwork.c app/package.c app/package_metadata.c vendor/minizip/unzip.c vendor/minizip/ioapi.c common/settings.c)
+add_executable(psvsd_am_app
+  app/main.c app/session.c app/manager.c app/prepare.c
+  app/ui.c app/controller.c app/touch.c
+  app/updates.c app/update_network.c app/update_install.c
+  app/launch.c app/installer_cleanup.c app/relaunch.c app/migration.c
+  app/artwork.c app/package.c app/package_metadata.c
+  vendor/minizip/unzip.c vendor/minizip/ioapi.c
+  common/settings.c)
 target_compile_definitions(psvsd_am_app PRIVATE IOAPI_NO_64)
 target_compile_options(psvsd_am_app PRIVATE -Wall -Wextra -Werror -O2 -fno-builtin-printf)
 # Reserve an extra data-segment page for vita-elf-create's appended metadata.
@@ -75,21 +92,34 @@ endif()
 string(REPLACE "${vita_data_align}" "${vita_data_align}\n  . += 0x10000;" vita_link_contents "${vita_link_contents}")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/app-layout.ld" "${vita_link_contents}")
 target_link_options(psvsd_am_app PRIVATE "-Wl,-T,${CMAKE_CURRENT_BINARY_DIR}/app-layout.ld")
-target_link_libraries(psvsd_am_app SceDisplay_stub SceCtrl_stub SceProcessmgr_stub
-  SceIofilemgr_stub SceLibKernel_stub SceVshBridge_stub ScePower_stub SceTouch_stub SceLiveArea_stub SceNet_stub SceNetCtl_stub SceAppMgr_stub ScePromoterUtil_stub SceSysmodule_stub taihen_stub
+target_link_libraries(psvsd_am_app
+  SceDisplay_stub SceCtrl_stub SceProcessmgr_stub SceIofilemgr_stub SceLibKernel_stub
+  SceVshBridge_stub ScePower_stub SceTouch_stub SceLiveArea_stub SceNet_stub SceNetCtl_stub
+  SceAppMgr_stub ScePromoterUtil_stub SceSysmodule_stub taihen_stub
   -Wl,--start-group curl mbedtls mbedx509 mbedcrypto everest p256m z zstd pthread -Wl,--end-group)
 clean_vita_self(psvsd_am_app.self psvsd_am_app UNSAFE)
-add_executable(psvsd_am_installer app/installer_main.c app/launch.c app/relaunch.c app/migration.c app/package.c app/package_metadata.c app/ui.c app/updates.c common/settings.c)
+
+add_executable(psvsd_am_installer
+  app/installer_main.c app/launch.c app/relaunch.c app/migration.c
+  app/package.c app/package_metadata.c app/ui.c app/updates.c
+  common/settings.c)
 target_compile_options(psvsd_am_installer PRIVATE -Wall -Wextra -Werror -O2 -ffunction-sections -fdata-sections)
 target_link_options(psvsd_am_installer PRIVATE -Wl,--gc-sections)
-target_link_libraries(psvsd_am_installer SceAppMgr_stub ScePromoterUtil_stub SceSysmodule_stub SceDisplay_stub SceCtrl_stub SceLibKernel_stub SceIofilemgr_stub SceProcessmgr_stub)
+target_link_libraries(psvsd_am_installer
+  SceAppMgr_stub ScePromoterUtil_stub SceSysmodule_stub SceDisplay_stub
+  SceCtrl_stub SceLibKernel_stub SceIofilemgr_stub SceProcessmgr_stub)
 clean_vita_self(psvsd_am_installer.self psvsd_am_installer UNSAFE)
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/installer.sfo"
-  COMMAND "${VITASDK}/bin/vita-mksfoex" -s TITLE_ID=RTPSVUPD1 -s APP_VER=${AM_PACKAGE_VERSION} -s AM_VERSION=${AM_VERSION}
-    -s CONTENT_ID=HB0001-RTPSVUPD1_00-0000000000000000 "PSVSD/AM Installer" "${CMAKE_CURRENT_BINARY_DIR}/installer.sfo")
+  COMMAND "${VITASDK}/bin/vita-mksfoex"
+    -s "TITLE_ID=${AM_INSTALLER_TITLE_ID}" -s "APP_VER=${AM_PACKAGE_VERSION}" -s "AM_VERSION=${AM_VERSION}"
+    -s "CONTENT_ID=HB0001-${AM_INSTALLER_TITLE_ID}_00-0000000000000000"
+    "PSVSD/AM Installer" "${CMAKE_CURRENT_BINARY_DIR}/installer.sfo"
+  DEPENDS "${am_paths}"
+  VERBATIM)
 add_custom_target(installer_sfo DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/installer.sfo")
+
 set(VITA_MKSFOEX_FLAGS "-s AM_VERSION=${AM_VERSION}")
-vita_create_vpk(PSVSD_AM.vpk RTPSV0001 psvsd_am_app.self
+vita_create_vpk(PSVSD_AM.vpk ${AM_APP_TITLE_ID} psvsd_am_app.self
   VERSION ${AM_PACKAGE_VERSION} NAME "PSVSD/AM"
   FILE "${CMAKE_CURRENT_BINARY_DIR}/psvsd_am_installer.self" installer/eboot.bin
   FILE "${CMAKE_CURRENT_BINARY_DIR}/installer.sfo" installer/param.sfo
@@ -111,10 +141,17 @@ vita_create_vpk(PSVSD_AM.vpk RTPSV0001 psvsd_am_app.self
   FILE "${CMAKE_CURRENT_SOURCE_DIR}/../assets/fonts/LICENSE.txt" FONT_LICENSE.txt
   FILE "${CMAKE_CURRENT_SOURCE_DIR}/../docs/THIRD_PARTY_NOTICES.md" CREDITS.txt
   FILE "${CMAKE_CURRENT_SOURCE_DIR}/../assets/template.xml" sce_sys/livearea/contents/template.xml)
+# vita.cmake uses suffixed targets with newer CMake versions.
+set(vpk_target PSVSD_AM.vpk)
+set(self_suffix "")
 if(TARGET PSVSD_AM.vpk-vpk)
-  add_dependencies(PSVSD_AM.vpk-vpk usbmc_accessory_probe.skprx-self psvsd_am.skprx-self psvsd_am_status.skprx-self)
-else()
-  add_dependencies(PSVSD_AM.vpk usbmc_accessory_probe.skprx psvsd_am.skprx psvsd_am_status.skprx)
+  set(vpk_target PSVSD_AM.vpk-vpk)
+  set(self_suffix "-self")
 endif()
-
-add_dependencies(PSVSD_AM.vpk-vpk psvsd_am_installer.self-self installer_sfo)
+add_dependencies(${vpk_target}
+  psvsd_am_app.self${self_suffix}
+  psvsd_am_installer.self${self_suffix}
+  usbmc_accessory_probe.skprx${self_suffix}
+  psvsd_am.skprx${self_suffix}
+  psvsd_am_status.skprx${self_suffix}
+  installer_sfo)

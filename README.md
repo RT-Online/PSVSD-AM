@@ -4,9 +4,9 @@
 
 AI tools assisted with code development, documentation, and testing. RefurbedTech directed development and performed hardware testing.
 
-Version **1.3.0** · Vita title ID **RTPSV0001** · Package version **01.32**
+Version **1.3.1** · Vita title ID **RTPSV0001** · Package version **01.33**
 
-The launcher displays the `1.3` series. The app and update metadata show `1.3.0`.
+The launcher displays the `1.3` series. The app and update metadata show `1.3.1`.
 See [the Vita test guide](docs/UPDATE_TEST.md) for update, reboot and speed checks.
 
 ## Features
@@ -72,12 +72,13 @@ Interrupted copies may retain recovery data in `uma0:data/PSVSD_AM/prepare-XXXXX
 
 | Path | Purpose |
 | --- | --- |
-| `src/app/` | UI, input, settings/configuration manager, verified copying and module loading |
+| `src/app/` | UI and input, storage configuration, verified app copying, updater and installer |
 | `src/plugin/` | Boot mount, manual mount and read-only query roles |
-| `src/common/` | Shared paths and strict settings parser |
-| `src/vendor/taihen/` | Licensed public SDK header/import stubs |
-| `assets/`, `tools/` | Launcher art, fonts and asset generator |
+| `src/common/` | Shared paths, title IDs, versions and settings parser |
+| `src/vendor/` | MiniZip sources and public taiHEN SDK headers and stubs |
+| `assets/`, `tools/` | Launcher art, fonts, packaging assets and build tools |
 | `tests/` | Host mocks and regression checks |
+| `PSVSD_WiFi1000_Holder_V9.stl` | Printable holder for the Wi-Fi PCH-1000 installation |
 
 The three kernel payloads are intentional: `psvsd_am.skprx` is the boot plugin, `usbmc_accessory_probe.skprx` performs manual secondary mounting, and `psvsd_am_status.skprx` verifies the current USB mapping. The latter two are used by the released app.
 
@@ -117,8 +118,10 @@ you install manually if the app is busy when the check completes.
 
 The updater checks the VPK SHA-256 before extracting into its staging directory.
 It verifies ZIP CRCs and app and installer metadata before handing off to the
-temporary installer. The helper stops the previous PSVSD/AM process, promotes the
-staged package and requests that PSVSD/AM reopen. On the return from the
+temporary installer. If staging rejects a package before requesting system
+promotion, it removes the temporary package and installer files. The helper
+stops the previous PSVSD/AM process, promotes the staged package and requests
+that PSVSD/AM reopen. On the return from the
 installer, PSVSD/AM removes the installer bubble before drawing its first
 screen. Update and cleanup failures appear in the log.
 
@@ -137,7 +140,7 @@ monotonically increasing NN.NN package revision. Both app and helper carry
 AM_VERSION so installation validates the exact release tag and matching package.
 
 The installed version controls the launch of the temporary installer. The helper
-from the downloaded VPK controls the return. An in-app upgrade from 1.2.11
+from the downloaded VPK controls the return. An in-app upgrade from 1.3.0
 exercises the full handoff.
 
 ### Switching storage in either direction
@@ -157,11 +160,10 @@ The live USB ux0 mapping is retained throughout preparation; reboot applies the
 saved target. Missing original storage blocks Save instead of allowing an unsafe
 switch. Keep the original memory card inserted during this process.
 
-**One-time upgrade step for a system already using USB ux0:** install this revised
-1.1.7 build, leave the target at ux0 and use Save and Reboot once. That loads the
-updated boot plugin so it can capture the original storage. Then select uma0
-(or disable mounting) and Save and Reboot to perform the reverse copy. An old
-resident plugin cannot provide the new mapping information until rebooted.
+When upgrading an older installation that already uses USB ux0, keep the target
+at ux0 and use Save and Reboot once to load the current boot plugin. It captures
+the original storage during boot. You can then select uma0 or disable mounting
+and use Save and Reboot to perform the reverse copy.
 
 The version checker does not offer same-version replacements. Native/hardware
 return-storage mounting still requires Vita testing.

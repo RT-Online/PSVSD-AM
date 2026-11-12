@@ -420,7 +420,7 @@ int main(void) {
     am_log("Artwork refresh needed: %d; deferred until user Exit/Reboot.\n",artwork);
     if (artwork) snprintf(model.message,sizeof(model.message),"Launcher artwork pending. Choose Reboot to refresh it.");
     char handoff[2048];
-    if (am_read_log(AM_UPDATE_ROOT "/handoff.log",handoff,sizeof(handoff))>=0) {
+    if (am_read_log(AM_UPDATE_HANDOFF_LOG,handoff,sizeof(handoff))>=0) {
         am_log("Updater handoff:\n");
         char *line=handoff;
         while (*line) {
@@ -429,7 +429,7 @@ int main(void) {
             if (!next) break;
             line=next+1;
         }
-        remove(AM_UPDATE_ROOT "/handoff.log");
+        remove(AM_UPDATE_HANDOFF_LOG);
     }
     SceTouchPanelInfo panel;memset(&panel,0,sizeof(panel));
     previous_touch_valid=sceTouchGetSamplingState(SCE_TOUCH_PORT_FRONT,&previous_touch_state)>=0;
@@ -442,11 +442,11 @@ int main(void) {
     am_log("Front touch: sampling=%08X panel=%08X bounds=%d,%d..%d,%d enabled=%d\n",
            (unsigned)touch_start,(unsigned)touch_info,panel.minDispX,panel.minDispY,panel.maxDispX,panel.maxDispY,model.touch_available);
     int installer_return=resumed!=0;
-    FILE *installed=fopen(AM_UPDATE_ROOT "/result","rb");
+    FILE *installed=fopen(AM_UPDATE_RESULT,"rb");
     if (installed) {
         installer_return=1;
         char result[16]={0};fread(result,1,8,installed);fclose(installed);
-        remove(AM_UPDATE_ROOT "/result");
+        remove(AM_UPDATE_RESULT);
         am_log("Installer result: %s\n",result);
         if (!strcmp(result,"00000000")) snprintf(model.message,sizeof(model.message),artwork>0?"Update installed. Choose Reboot to refresh home-screen artwork.":"Update installed. Saved mount settings retained.");
         else snprintf(model.message,sizeof(model.message),"Update installation failed (%s). See Log.",result);

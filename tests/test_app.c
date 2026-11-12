@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include "test_temp.h"
 #include "../src/app/session.c"
 
 static char root[128];
@@ -91,8 +92,7 @@ int taiStartKernelModuleForUser(int id,tai_module_args_t *args,void *opt,int *re
 int taiUnloadKernelModule(int id,int f,void *o) { assert(id==42 && !f && !o);++unload_calls;return 0; }
 static void reset(void) {
     memset(&cfg,0,sizeof(cfg));memset(fd_path,0,sizeof(fd_path));load_calls=start_calls=unload_calls=0;
-    char temp[]="/tmp/accessory-app-test-XXXXXX";char *r=mkdtemp(temp);assert(r);
-    snprintf(root,sizeof(root),"%s",r);
+    test_temp_dir(root,sizeof(root),"app");
     char p[512];assert(!mkdir(mapped("app0:",p),0700));
     assert(!mkdir(mapped("ux0:data",p),0700));++cases;
 }

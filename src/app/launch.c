@@ -17,9 +17,9 @@ static int start_target(const char *title) {
     int second=sceAppMgrLaunchAppByUri(0xFFFFF,uri);
     if (second>=0) return second;
     if (first>=0) return first;
-    FILE *f=fopen(AM_UPDATE_ROOT "/handoff.log","a");
+    FILE *f=fopen(AM_UPDATE_HANDOFF_LOG,"a");
     if (f) { fprintf(f,"Play URI failed: %s %08X %08X\n",title,(unsigned)first,(unsigned)second);fclose(f); }
     return second;
 }
-int am_update_launch_installer(void) { return start_target("RTPSVUPD1"); }
-int am_update_launch_app(void) { return start_target("RTPSV0001"); }
+int am_update_launch_installer(void) { return start_target(AM_INSTALLER_TITLE_ID); }
+int am_update_launch_app(void) { return start_target(AM_APP_TITLE_ID); }

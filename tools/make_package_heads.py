@@ -1,13 +1,22 @@
 #!/usr/bin/env python3
 # VitaShell fake-package header algorithm, TheFloW, GPL-3.0-or-later.
 from pathlib import Path
-import hashlib, struct
+import hashlib, re, struct
 root=Path(__file__).resolve().parents[1]
+definitions=(root/'src/common/paths.h').read_text()
+
+def title_id(name):
+    match=re.search(rf'^#define {name} "([A-Z0-9]{{9}})"$', definitions, re.MULTILINE)
+    if not match:
+        raise ValueError(f'Invalid {name} in src/common/paths.h')
+    return match[1]
+
 def hmac(data):
     h=hashlib.sha1(data).digest()
     b=h[4:12]*2+h[12:16]+bytes([h[16],h[1],h[2],h[3]])+h[12:16]+bytes([h[16],h[1],h[2],h[3]])+bytes(32)
     return hashlib.sha1(b).digest()[:16]
-for title,name in [('RTPSV0001','main-head.bin'),('RTPSVUPD1','updater/head.bin')]:
+for title,name in [(title_id('AM_APP_TITLE_ID'),'main-head.bin'),
+                   (title_id('AM_INSTALLER_TITLE_ID'),'updater/head.bin')]:
     b=bytearray((root/'tools/head-template.bin').read_bytes())
     content=('HB0001-'+title+'_00-0000000000000000').encode()
     b[0x30:0x60]=content.ljust(48,b'\0')

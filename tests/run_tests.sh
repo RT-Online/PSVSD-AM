@@ -2,7 +2,15 @@
 set -eu
 test_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 test_out=$(mktemp -d)
-trap 'rm -rf "$test_out"' EXIT HUP INT TERM
+trap 'rm -rf "$test_out"' EXIT
+trap 'exit 1' HUP INT TERM
+test_out=$(CDPATH= cd -- "$test_out" && pwd)
+mkdir "$test_out/fixtures"
+
+run_fixture_test() (
+  cd "$test_out/fixtures"
+  TMPDIR=. ASAN_OPTIONS=detect_leaks=0 "$test_out/$1"
+)
 for mode in 0 1; do
   cc -std=c99 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
     -DUSBMC_HOST_TEST=1 -DUSBMC_ACCESSORY_PROBE="$mode" -DUSBMC_MANAGED_BOOT="$((1-mode))" \
@@ -13,11 +21,11 @@ for mode in 0 1; do
 done
 cc -std=c99 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
   -DACCESSORY_APP_TEST=1 -I"$test_dir" "$test_dir/test_app.c" -o "$test_out/test_app"
-ASAN_OPTIONS=detect_leaks=0 "$test_out/test_app"
+run_fixture_test test_app
 cc -std=c99 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
   -DPSVSD_AM_HOST_TEST=1 -I"$test_dir" "$test_dir/test_manager.c" \
   "$test_dir/../src/common/settings.c" -o "$test_out/test_manager"
-ASAN_OPTIONS=detect_leaks=0 "$test_out/test_manager"
+run_fixture_test test_manager
 for suite in managed status; do
   cc -std=c99 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
     -DUSBMC_HOST_TEST=1 -DUSBMC_ACCESSORY_PROBE=0 -I"$test_dir" \
@@ -42,13 +50,15 @@ cc -std=c99 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
   "$test_dir/../src/app/package_metadata.c" "$test_dir/../src/vendor/minizip/unzip.c" \
   "$test_dir/../src/vendor/minizip/ioapi.c" -lz -o "$test_out/test_update_install"
 python3 "$test_dir/make_update_fixtures.py" "$test_out/install"
-for fixture in good traversal duplicate wrong_title wrong_version oversize truncated crc symlink missing_helper wrong_helper_title wrong_helper_version multi_digit wrong_semantic wrong_helper_semantic; do
+for fixture in good promotion_failed traversal duplicate wrong_title wrong_version oversize truncated crc symlink missing_helper wrong_helper_title wrong_helper_version multi_digit wrong_semantic wrong_helper_semantic; do
   ASAN_OPTIONS=detect_leaks=0 "$test_out/test_update_install" "$test_out/install" "$fixture"
 done
+# Retry with a valid package after the rejected installer metadata fixture.
+ASAN_OPTIONS=detect_leaks=0 "$test_out/test_update_install" "$test_out/install" good
 cc -std=c99 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
   -DPSVSD_AM_HOST_TEST=1 -I"$test_dir" "$test_dir/test_artwork.c" \
   "$test_dir/../src/app/artwork.c" -o "$test_out/test_artwork"
-ASAN_OPTIONS=detect_leaks=0 "$test_out/test_artwork"
+run_fixture_test test_artwork
 
 cc -std=c99 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
   -DPSVSD_AM_HOST_TEST=1 -I"$test_dir" "$test_dir/test_relaunch.c" \
@@ -57,11 +67,11 @@ mkdir "$test_out/relaunch"
 ASAN_OPTIONS=detect_leaks=0 "$test_out/test_relaunch" "$test_out/relaunch"
 cc -std=c99 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
   -DPSVSD_AM_HOST_TEST=1 -I"$test_dir" "$test_dir/test_installer.c" -o "$test_out/test_installer"
-ASAN_OPTIONS=detect_leaks=0 "$test_out/test_installer"
+run_fixture_test test_installer
 cc -std=c99 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
   -DPSVSD_AM_HOST_TEST=1 -I"$test_dir" "$test_dir/test_migration.c" \
   "$test_dir/../src/app/migration.c" -o "$test_out/test_migration"
-ASAN_OPTIONS=detect_leaks=0 "$test_out/test_migration"
+run_fixture_test test_migration
 
 cc -std=c99 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
   -DPSVSD_AM_HOST_TEST=1 -I"$test_dir" "$test_dir/test_cleanup.c" \

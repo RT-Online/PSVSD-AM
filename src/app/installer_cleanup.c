@@ -9,14 +9,13 @@
 #endif
 #include <stdio.h>
 
-#define HELPER_TITLE "RTPSVUPD1"
-#define HELPER_EXECUTABLE "ux0:app/" HELPER_TITLE "/eboot.bin"
+#define HELPER_EXECUTABLE "ux0:app/" AM_INSTALLER_TITLE_ID "/eboot.bin"
 #define FILE_NOT_FOUND 0x80010002u
 enum { CLEANUP_POLLS=25,CLEANUP_POLL_US=20000 };
 
 static int helper_running(void) {
     SceUID pid=-1;
-    int ret=sceAppMgrGetIdByName(&pid,HELPER_TITLE);
+    int ret=sceAppMgrGetIdByName(&pid,AM_INSTALLER_TITLE_ID);
     if ((unsigned)ret==AM_APPMGR_NOT_RUNNING) return 0;
     if (ret<0) return ret;
     return pid>0?1:(int)SCE_APPMGR_ERROR_BUSY;
@@ -36,7 +35,7 @@ static int cleanup_installer(int returning_from_update) {
     int present=sceIoGetstat(HELPER_EXECUTABLE,&info);
     if (present<0) return (unsigned)present==FILE_NOT_FOUND?0:present;
     if (returning_from_update) {
-        int ready=sceIoGetstat(AM_UPDATE_ROOT "/ready",&info);
+        int ready=sceIoGetstat(AM_UPDATE_READY,&info);
         if (ready>=0) return AM_INSTALLER_CLEANUP_DEFERRED;
         if ((unsigned)ready!=FILE_NOT_FOUND) return ready;
         /* AutoPlugin2 releases the previous app context before deleting
@@ -44,7 +43,7 @@ static int cleanup_installer(int returning_from_update) {
         int stopped=sceAppMgrDestroyOtherApp();
         if (stopped<0 && (unsigned)stopped!=AM_APPMGR_NOT_RUNNING) return stopped;
     } else if (wait_for_helper_exit()!=0) {
-        int stopped=sceAppMgrDestroyAppByName(HELPER_TITLE);
+        int stopped=sceAppMgrDestroyAppByName(AM_INSTALLER_TITLE_ID);
         if (stopped<0 && (unsigned)stopped!=AM_APPMGR_NOT_RUNNING) return stopped;
         if (stopped>=0) {
             int running=wait_for_helper_exit();
@@ -58,7 +57,7 @@ static int cleanup_installer(int returning_from_update) {
         if (present<0) {
             if ((unsigned)present!=FILE_NOT_FOUND) return present;
             if (returning_from_update) return AM_INSTALLER_REMOVED;
-            remove(AM_UPDATE_ROOT "/result");
+            remove(AM_UPDATE_RESULT);
             am_update_relaunch_cancel();
             return 0;
         }

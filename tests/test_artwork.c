@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include "mock_artwork.h"
+#include "test_temp.h"
 #include "../src/app/artwork.h"
 #include "../src/common/paths.h"
 #undef rename
@@ -28,7 +29,7 @@ int sceLiveAreaReplaceAllForTitleSync(const char *p,const char *id,const void *m
 static void write_file(const char *p,const char *s) { FILE *f=fopen(p,"wb");assert(f);assert(fputs(s,f)>=0);assert(fclose(f)==0); }
 static void check(const char *p,const char *s) { char b[64]={0};FILE *f=fopen(p,"rb");assert(f);size_t n=fread(b,1,sizeof(b)-1,f);assert(n==strlen(s));assert(!ferror(f));fclose(f);assert(!strcmp(b,s)); }
 int main(void) {
-    char root[]="/tmp/am-artwork-XXXXXX";assert(mkdtemp(root));assert(chdir(root)==0);
+    char root[512];test_temp_dir(root,sizeof(root),"artwork");assert(chdir(root)==0);
     const char *dirs[]={"app0:sce_sys","app0:sce_sys/livearea","app0:sce_sys/livearea/contents","ur0:appmeta","ur0:data"};
     for (unsigned i=0;i<sizeof(dirs)/sizeof(dirs[0]);++i) assert(mkdir(dirs[i],0700)==0);
     write_file("app0:sce_sys/icon0.png","icon-new");

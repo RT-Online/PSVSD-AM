@@ -1,10 +1,19 @@
 #ifndef ACCESSORY_PATHS_H
 #define ACCESSORY_PATHS_H
 #include <stdint.h>
-#define ACCESSORY_VERSION "1.3.0"
+#define ACCESSORY_VERSION "1.3.1"
 /* Monotonic Vita NN.NN revision, independent of semantic version digits. */
-#define ACCESSORY_PACKAGE_VERSION "01.32"
+#define ACCESSORY_PACKAGE_VERSION "01.33"
+#define AM_APP_TITLE_ID "RTPSV0001"
+#define AM_INSTALLER_TITLE_ID "RTPSVUPD1"
 #define ACCESSORY_DATA_DIR "ux0:data/PSVSD_AM"
+#define AM_UPDATE_ROOT ACCESSORY_DATA_DIR "/update"
+#define AM_UPDATE_VPK AM_UPDATE_ROOT "/release.vpk"
+#define AM_UPDATE_STAGE AM_UPDATE_ROOT "/package"
+#define AM_UPDATE_HELPER AM_UPDATE_ROOT "/helper"
+#define AM_UPDATE_READY AM_UPDATE_ROOT "/ready"
+#define AM_UPDATE_RESULT AM_UPDATE_ROOT "/result"
+#define AM_UPDATE_HANDOFF_LOG AM_UPDATE_ROOT "/handoff.log"
 #define AM_LEGACY_DATA_DIR "ux0:data/PSVSD_Accessory"
 #define AM_LEGACY_KERNEL_DIR "ur0:data/PSVSD_Accessory"
 #define AM_LEGACY_SETTINGS_PATH AM_LEGACY_KERNEL_DIR "/settings.ini"

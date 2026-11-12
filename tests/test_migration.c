@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "mock_migration.h"
+#include "test_temp.h"
 #include "../src/app/migration.h"
 #include "../src/common/paths.h"
 static const char *fail_rename;
@@ -22,7 +23,7 @@ int sceIoRemove(const char *p) { return unlink(p)?err():0; }
 static void put(const char *p,const char *s) { FILE *f=fopen(p,"wb");assert(f);assert(fputs(s,f)>=0);assert(fclose(f)==0); }
 static void check(const char *p,const char *s) { char text[128]={0};FILE *f=fopen(p,"rb");assert(f);assert(fread(text,1,sizeof(text)-1,f)==strlen(s));fclose(f);assert(!strcmp(text,s)); }
 int main(void) {
-    char root[]="/tmp/am-migration-XXXXXX";assert(mkdtemp(root));assert(chdir(root)==0);
+    char root[512];test_temp_dir(root,sizeof(root),"migration");assert(chdir(root)==0);
     assert(mkdir("ux0:data",0700)==0 && mkdir("ur0:data",0700)==0);
     assert(mkdir(AM_LEGACY_DATA_DIR,0700)==0 && mkdir(AM_LEGACY_KERNEL_DIR,0700)==0);
     put(AM_LEGACY_SETTINGS_PATH,"saved settings");put(AM_LEGACY_KERNEL_DIR "/app.log","legacy app log");
